@@ -1200,6 +1200,11 @@ class AudioPlaybackService : Service() {
                 "generation=$incomingGeneration"
         )
         refreshMetadata()
+        // MD3Music fork（实锤修复）：startVivoAtomicTimer 此前无任何调用点——25s
+        // lrc_change 重发兜底从未生效（死代码）。原子随身听在首次发送之后才连上时
+        // 拿不到歌词，且熄屏/暂停（30s 心跳停跑）期间完全没有重发。歌词就绪时启动
+        // 定时器（每首歌随 lyricInfo 推送重置；无歌词时 pushVivoAtomicExtras 安全跳过）。
+        if (currentLyricInfo.isNotEmpty()) startVivoAtomicTimer()
     }
 
     /** MediaSession / 广播接收器的既有入口：只有 action、无参数。 */

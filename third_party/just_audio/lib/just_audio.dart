@@ -58,8 +58,9 @@ JustAudioPlatform get _pluginPlatform {
 class AudioPlayer {
   /// MD3Music fork: 辅播放器（crossfade 用）的 id 前缀。
   ///
-  /// Android 侧 `AudioPlayer.java` 在构造时按此前缀判定"辅播放器"，
-  /// 跳过 MediaSession 创建（避免系统看到重复媒体会话）。
+  /// Android 侧所有播放器（含辅播放器）都会创建 Media3 会话，会话归属由
+  /// `AudioPlayer.play()` 收敛：只有真正开始播放的播放器，其会话才被归入
+  /// host（其余会话被释放），系统任意时刻只暴露一个活跃媒体会话。
   /// id 只用于 MethodChannel 名与平台消息的 `id` 字段，加前缀是安全的。
   static const String androidAuxIdPrefix = 'md3aux-';
 
@@ -258,10 +259,13 @@ class AudioPlayer {
   ///
   /// MD3Music fork: set [androidAuxPlayer] to `true` for the secondary player
   /// used during crossfade. Such a player gets an id prefixed with
-  /// [androidAuxIdPrefix], which makes the Android side skip creating a
-  /// `MediaSession` for it (otherwise the system would see two active media
-  /// sessions for the app). Combine it with `androidApplyAudioAttributes:
-  /// false` so the aux player never requests audio focus of its own.
+  /// [androidAuxIdPrefix] for diagnostics only; the Android side creates a
+  /// `MediaSession` for every player, and converges session ownership in
+  /// `AudioPlayer.play()`: only the player that actually starts playing has
+  /// its session hosted, all other sessions are released from the host, so
+  /// the system always exposes a single active media session. Combine it with
+  /// `androidApplyAudioAttributes: false` so the aux player never requests
+  /// audio focus of its own.
   AudioPlayer({
     String? userAgent,
     bool handleInterruptions = true,

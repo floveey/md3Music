@@ -1239,10 +1239,11 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 }
             });
             mediaSession = sessionBuilder.build();
-            // MD3Music fork: 记录活跃播放器，供 AudioPlaybackService 注入封面到媒体3会话
-            sActivePlayer = this;
-            // MD3Music fork: 若已注册 MediaSessionService host，把本会话归入服务以渲染 now playing 通知
-            ensureSessionHosted();
+            // MD3Music fork（vivo 原子随身听修复）：不在建会话时抢占 sActivePlayer/归入 host。
+            // 交叉淡化预加载会创建辅播放器并建会话——若此时抢占并释放「其他实例」的会话，
+            // 正在播放的主播放器会话（已被原子随身听/锁屏/SystemUI 连接）当场掉线，
+            // 卡片在歌还没播完时就消失。会话归属由 play() 统一收敛（sActivePlayer =
+            // this + syncSingleSessionToHost），只有真正开始播放的播放器才接管会话。
     }
 
     // MD3Music fork: 关联系统的 MediaSession（见 ensurePlayerInitialized）
@@ -1364,22 +1365,6 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                     try { ms.release(); } catch (Exception ignore) {}
                     other.mediaSession = null;
                 } catch (Exception ignore) {}
-            }
-        }
-    }
-
-    /// 实例方法：会话创建后调用，把当前播放器加入 host（若已注册）。
-    /// MD3Music fork（方向1）：仅当本实例是「活跃播放器」时才把会话加入 host；
-    /// 非活跃播放器不加入（且确保其已被 host 移除），保证系统只暴露活跃播放器的一个会话。
-    private void ensureSessionHosted() {
-        if (this == sActivePlayer) {
-            ensureActiveSessionHosted();
-        } else {
-            // 非活跃：确保从 host 移除，避免重新加入造成多会话
-            MediaSessionService host = sSessionHost;
-            if (host != null && mediaSession != null) {
-                try { if (host.isSessionAdded(mediaSession)) host.removeSession(mediaSession); }
-                catch (Exception ignore) {}
             }
         }
     }

@@ -96,12 +96,14 @@ class AudioService {
     double? loudnessLufs,
     double? loudnessPeakDb,
     Duration? initialPosition,
+    dynamic tag,
   }) async {
     final blobUrl = await _fetchAudioBlob(url);
     // 与 io 端同口径：定位交给平台层，避免「加载后 seek」的竞态
     await _player.setUrl(
       blobUrl,
       initialPosition: initialPosition ?? Duration.zero,
+      tag: tag,
     );
   }
 

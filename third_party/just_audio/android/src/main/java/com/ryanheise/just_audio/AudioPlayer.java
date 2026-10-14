@@ -897,6 +897,13 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         if (artist != null && !artist.isEmpty()) metadata.setArtist(artist);
         String album = (String)tagMap.get("album");
         if (album != null && !album.isEmpty()) metadata.setAlbumTitle(album);
+        // MD3Music fork: 补齐上方注释承诺的 artUri 映射——切歌过渡瞬间会话元数据
+        // 即带封面 URI，SystemUI/vivo 原子随身听可立即取封面，不必等后台封面
+        // 线程注入（预取未命中时封面空档可达数秒）。
+        String artUri = (String)tagMap.get("artUri");
+        if (artUri != null && !artUri.isEmpty()) {
+            metadata.setArtworkUri(android.net.Uri.parse(artUri));
+        }
         builder.setMediaMetadata(metadata.build());
     }
 

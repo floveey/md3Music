@@ -724,6 +724,7 @@ class AudioService {
     double? loudnessLufs,
     double? loudnessPeakDb,
     Duration? initialPosition,
+    dynamic tag,
   }) async {
     abortCrossfade();
     // 音量均衡响度：歌曲未带响度时，回退查「url → 响度」缓存（KugouPlayUrl 解析时记录）
@@ -738,6 +739,7 @@ class AudioService {
       url,
       headers: const {},
       initialPosition: initialPosition ?? Duration.zero,
+      tag: tag,
     );
     await _applyNormalizationGainActive();
   }

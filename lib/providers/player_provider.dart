@@ -4250,12 +4250,30 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 原先的「setUrl 后轮询等 ready 再 seek」有致命窗口——超时 10s 仍停在
       // `ProcessingState.loading` 时，那段 seek 会被 just_audio 静默丢弃
       // （见铁律 18），用户感知就是「进房有概率从头播，暂停再播放才对上」。
+      // MD3Music fork（vivo 原子随身听/锁屏第二首起信息消失修复）：给 setUrl 带上
+      // 当前歌曲元数据 tag。无 tag 时新 MediaItem 元数据全空，切歌过渡瞬间 media3
+      // 会话发布「无标题无身份」元数据，vivo hook 因 title 为空补不了身份 →
+      // 原子随身听/锁屏清空卡片。刻意不带 id：framework MEDIA_ID 须保持空串由
+      // hook 补 title|artist 身份，与 lrc_change extras 的 meidia_id 匹配口径
+      // 一致（实测数字 ID 不匹配，见 pushVivoAtomicExtras 注释）。
+      final mediaTag = song == null
+          ? null
+          : {
+              'title': song.displayName,
+              'artist': song.artist,
+              'album': song.album,
+              'artUri':
+                  song.isOnline && song.artworkUri != null
+                  ? song.artworkUri
+                  : null,
+            };
       final loaded = await _runAudioSourceLoad(
         () => _audioService!.setUrl(
           url,
           loudnessLufs: _currentSong?.loudnessLufs,
           loudnessPeakDb: _currentSong?.loudnessPeakDb,
           initialPosition: seekTo,
+          tag: mediaTag,
         ),
         request: request,
         song: song,

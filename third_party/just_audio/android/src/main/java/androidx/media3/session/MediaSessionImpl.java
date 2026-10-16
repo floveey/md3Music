@@ -128,6 +128,14 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
   private final SessionToken sessionToken;
   private final MediaSession instance;
   private final Handler applicationHandler;
+
+  /// MD3Music fork（方向3·shadow 播放态镜像）：供 MediaSessionLegacyStub 做
+  /// "本会话是否当前活跃会话"的身份比较。镜像只允许活跃会话发布时广播，
+  /// 防止 shadow 会话的 paused 旧态覆盖刚镜像的新态（真机：淡化后岛/锁屏
+  /// 控件消失的根因）。包内可见，不对外。
+  MediaSession getInstanceForShadowMirrorIdentity() {
+    return instance;
+  }
   private final BitmapLoader bitmapLoader;
   private final Runnable periodicSessionPositionInfoUpdateRunnable;
   private final Handler mainHandler;

@@ -811,19 +811,41 @@ import org.checkerframework.checker.initialization.qual.Initialized;
   public void updateLegacySessionPlaybackState(PlayerWrapper playerWrapper) {
     postOrRun(
         sessionImpl.getApplicationHandler(),
-        () -> sessionCompat.setPlaybackState(playerWrapper.createPlaybackStateCompat()));
+        () -> {
+          PlaybackStateCompat playbackState = playerWrapper.createPlaybackStateCompat();
+          sessionCompat.setPlaybackState(playbackState);
+          // MD3Music fork（方向3·shadow 播放态镜像）：活跃会话发布后同步给 shadow。
+          mirrorPlaybackStateToShadowSessionsIfActive(playbackState);
+        });
   }
 
   public void updateLegacySessionPlaybackStateAndQueue(PlayerWrapper playerWrapper) {
     postOrRun(
         sessionImpl.getApplicationHandler(),
         () -> {
-          sessionCompat.setPlaybackState(playerWrapper.createPlaybackStateCompat());
+          PlaybackStateCompat playbackState = playerWrapper.createPlaybackStateCompat();
+          sessionCompat.setPlaybackState(playbackState);
+          // MD3Music fork（方向3·shadow 播放态镜像）：与 updateLegacySessionPlaybackState 同源。
+          mirrorPlaybackStateToShadowSessionsIfActive(playbackState);
           controllerLegacyCbForBroadcast.updateQueue(
               playerWrapper.getAvailableCommands().contains(Player.COMMAND_GET_TIMELINE)
                   ? playerWrapper.getCurrentTimeline()
                   : Timeline.EMPTY);
         });
+  }
+
+  /// MD3Music fork（方向3·shadow 播放态镜像）：
+  /// 仅当【本会话正是当前活跃会话】时，把刚发布的 PlaybackState 同步进
+  /// 其它存活（shadow）会话；shadow 自己的发布（paused/旧态）不广播，
+  /// 避免用旧态覆盖刚镜像的新态。会话身份经 sessionImpl 的内部引用比较，
+  /// 开关门控在 AudioPlayer.SHADOW_SESSION_MODE（vivo/iQOO）。
+  private void mirrorPlaybackStateToShadowSessionsIfActive(PlaybackStateCompat state) {
+    MediaSession activeSession = com.ryanheise.just_audio.AudioPlayer.getActiveMediaSession();
+    if (activeSession == null) return;
+    if (!com.ryanheise.just_audio.AudioPlayer.isShadowPlaybackMirrorEnabled()) return;
+    if (sessionImpl.getInstanceForShadowMirrorIdentity() != activeSession) return;
+    MediaSessionCompat.mirrorPlaybackStateToShadows(state, sessionCompat);
+    com.ryanheise.just_audio.AudioPlayer.logShadowPlaybackSync(state);
   }
 
   private void handleMediaRequest(MediaItem mediaItem, boolean play) {

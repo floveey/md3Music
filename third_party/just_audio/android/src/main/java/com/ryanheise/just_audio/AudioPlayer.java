@@ -1379,6 +1379,22 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         return p != null ? p.mediaSession : null;
     }
 
+    /// shadow 播放态镜像的总开关（方向3）：仅 vivo/iQOO 上为 true。由 media3
+    /// legacy stub 查询；开启时 stub 把活跃会话的 PlaybackState 同步给 shadow
+    /// 会话，否则岛/锁屏媒体控件在淡化切歌后因 shadow 停在 paused 而整块消失
+    /// （真机 6.0.5 修复版实测：会话保活+元数据镜像后仍会消失，缺的就是播放态）。
+    public static boolean isShadowPlaybackMirrorEnabled() {
+        return SHADOW_SESSION_MODE;
+    }
+
+    /// 诊断辅助：shadow 播放态镜像每次广播打一行 logcat，便于真机核对链路在工作
+    /// （预期现象：淡化收尾后岛/锁屏继续显示新歌并走进度）。
+    public static void logShadowPlaybackSync(
+            androidx.media3.session.legacy.PlaybackStateCompat state) {
+        Log.i("AudioFocusFork", "shadow playback mirror: state=" + state.getState()
+                + " pos=" + state.getPosition() + " speed=" + state.getPlaybackSpeed());
+    }
+
     // ==== MD3Music fork（方向2·shadow 会话保活，2026-10-16） ====
     // vivo 原子随身听（vivomusicmix）在冷启动时经 MediaBrowserServiceCompat 绑定本 App
     // 的媒体会话，之后把该 MediaControllerCompat 常驻钉在**首个会话对象**上：交叉淡化

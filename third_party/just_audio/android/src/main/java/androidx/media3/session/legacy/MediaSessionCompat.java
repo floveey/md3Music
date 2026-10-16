@@ -389,6 +389,38 @@ public class MediaSessionCompat {
         + " lrcLen=" + wholeLrc.length() + " sessions=" + live.size());
   }
 
+  /// MD3Music fork（方向3·shadow 播放态镜像）：把【当前活跃会话】刚生成的
+  /// PlaybackStateCompat 同步写进其它存活 legacy 会话。vivo 原子随身听/锁屏
+  /// 媒体控件按"会话是否在播"决定卡片存留：交叉淡化把活跃播放器迁到新会话后，
+  /// 被 #146 保留的 shadow 会话 PlaybackState 停在 paused，岛与锁屏控件被系统
+  /// 判定死亡而整块收起（2026-10-16 真机修复版实测：App 供血正常、双会话
+  /// 存活、lrc 正常重发，但岛/锁屏仍消失——缺的就是播放态）。metadata/封面/
+  /// 歌词已有 App 层镜像（AudioPlayer.updateActiveSession*），这里补齐播放态。
+  /// [excludeCompat] 为发布方自己，避免把活跃会话的态覆盖回它自己。
+  /// 仅 shadow 镜像开关（SHADOW_SESSION_MODE：vivo/iQOO）开启时被调用。
+  public static void mirrorPlaybackStateToShadows(
+      @Nullable PlaybackStateCompat state,
+      @Nullable MediaSessionCompat excludeCompat) {
+    if (state == null) return;
+    MediaSessionImplApi21 exclude = null;
+    if (excludeCompat != null
+        && excludeCompat.mImpl instanceof MediaSessionImplApi21) {
+      exclude = (MediaSessionImplApi21) excludeCompat.mImpl;
+    }
+    java.util.ArrayList<MediaSessionImplApi21> live;
+    synchronized (sVivoLrcLock) {
+      live = new java.util.ArrayList<>(sLiveApi21Impls);
+    }
+    for (MediaSessionImplApi21 impl : live) {
+      if (impl == exclude || impl.mDestroyed) continue;
+      try {
+        impl.setPlaybackState(state);
+      } catch (Throwable t) {
+        // 单个 session 失败不影响其他
+      }
+    }
+  }
+
   /// 原子随身听 lrc_change 是否需要发送：歌词变化立即发，相同歌词 25s 节流兜底
   /// （覆盖"车机/组件在播放开始后才连上"的情况）。
   static boolean shouldSendVivoLrcChange(String wholeLrc) {

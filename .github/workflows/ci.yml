@@ -48,6 +48,14 @@ jobs:
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
 
+      # fork 增补（测试装包不卸载）：固定本 fork 测试包的 debug 签名——每轮 runner
+      # 自生成的 key 不同，导致新测试包无法覆盖安装旧测试包。缓存一次生成后固定。
+      - name: Cache debug keystore (fork 测试构建专用)
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: fork-debug-keystore-v1
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:

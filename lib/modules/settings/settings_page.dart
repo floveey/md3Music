@@ -285,6 +285,9 @@ class _SettingsPageState extends State<SettingsPage>
   int _crossfadeSeconds = SettingsRepository.kCrossfadeDefaultSeconds;
   // 自动混音（AutoMix）：交叉淡化开启时按节拍对齐过渡点，由 Task 12 的播放器侧实现消费
   bool _automixEnabled = false;
+
+  /// 过滤 Live/现场版本
+  bool _skipLiveEnabled = false;
   // 音量均衡（响度归一）
   bool _volumeNormalizationEnabled = false;
   double _volumeNormalizationLufs =
@@ -595,6 +598,7 @@ class _SettingsPageState extends State<SettingsPage>
     final crossfadeEnabled = await _settingsRepository.getCrossfadeEnabled();
     final crossfadeSeconds = await _settingsRepository.getCrossfadeSeconds();
     final automixEnabled = await _settingsRepository.getAutomixEnabled();
+    final skipLiveEnabled = await _settingsRepository.getSkipLiveEnabled();
     final volumeNormalizationEnabled = await _settingsRepository
         .getVolumeNormalizationEnabled();
     final volumeNormalizationLufs = await _settingsRepository
@@ -756,6 +760,7 @@ class _SettingsPageState extends State<SettingsPage>
       _crossfadeEnabled = crossfadeEnabled;
       _crossfadeSeconds = crossfadeSeconds;
       _automixEnabled = automixEnabled;
+      _skipLiveEnabled = skipLiveEnabled;
       _volumeNormalizationEnabled = volumeNormalizationEnabled;
       _volumeNormalizationLufs = volumeNormalizationLufs;
       _keepScreenOn = keepScreenOn;
@@ -4649,6 +4654,21 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
               context.read<PlayerProvider>().refreshAutomixSettings();
             },
           ),
+        // 过滤 Live/现场版本
+        // search: 过滤 Live 现场版本 跳过 Live
+        SwitchListTile(
+          title: const Text('过滤 Live/现场版本'),
+          subtitle: const Text('连播与列表起播时自动跳过标题含 Live/现场 的歌曲'),
+          value: _skipLiveEnabled,
+          onChanged: (value) {
+            AppHaptics.lightImpact(HapticCategory.control);
+            setState(() {
+              _skipLiveEnabled = value;
+            });
+            _settingsRepository.setSkipLiveEnabled(value);
+            context.read<PlayerProvider>().refreshLiveFilterSettings();
+          },
+        ),
         // 「失去音频焦点时」是下面这个开关的从属策略：忽略焦点关闭时才有意义
         // search: 音频焦点 忽略焦点 同时播放 共存 不被打断 焦点
         SwitchListTile(

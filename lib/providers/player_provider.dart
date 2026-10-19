@@ -46,6 +46,7 @@ import '../modules/player/mv_player_page.dart';
 import '../core/utils/app_toast.dart';
 import '../core/utils/audio_format_utils.dart';
 import '../core/utils/local_lyric_loader.dart';
+import '../utils/live_filter.dart';
 import '../data/repositories/history_repository.dart';
 import '../data/repositories/player_state_repository.dart';
 import '../data/repositories/settings_repository.dart';
@@ -494,6 +495,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _crossfadeDuration = const Duration(
     seconds: SettingsRepository.kCrossfadeDefaultSeconds,
   );
+
+  // —— 过滤 Live/现场版本（MD3 fork）——
+  // 判定发生在 next/previous 的高频路径上，同 crossfade 口径缓存字段。
+  bool _skipLiveEnabled = false;
 
   // —— 自动混音（AutoMix）——
   bool _automixEnabled = false;
@@ -1262,6 +1267,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _ensureNotDisposed();
       // 读取交叉淡化设置到字段缓存（判定在 positionStream 高频路径上）
       await _loadCrossfadeSettings();
+      _ensureNotDisposed();
+      // 恢复「过滤 Live/现场版本」开关（重启后保留用户选择）
+      await _loadLiveFilterSettings();
       _ensureNotDisposed();
       // 恢复音质降级提示开关（重启后保留用户选择）
       _showQualityDowngradeToast = await SettingsRepository()
@@ -2910,6 +2918,33 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// 设置页改动后刷新（与 [refreshCrossfadeSettings] 同通路）。
   Future<void> refreshAutomixSettings() => _loadCrossfadeSettings();
 
+  /// 从设置读取「过滤 Live/现场版本」开关到字段缓存。
+  /// 设置页改动后由 [refreshLiveFilterSettings] 重新调用。
+  Future<void> _loadLiveFilterSettings() async {
+    try {
+      _skipLiveEnabled = await SettingsRepository().getSkipLiveEnabled();
+    } catch (_) {}
+  }
+
+  /// 设置页修改「过滤 Live/现场版本」后调用，刷新字段缓存。
+  Future<void> refreshLiveFilterSettings() => _loadLiveFilterSettings();
+
+  /// 过滤 Live/现场 的起播点校正——起点命中且存在非 live 曲，从起点向后
+  /// 环形找第一个非 live；环形一圈必停，全部 live 则原样返回。
+  int _liveFilteredStartIndex(List<Song> songs, int startIndex) {
+    if (!_skipLiveEnabled ||
+        startIndex < 0 ||
+        startIndex >= songs.length ||
+        !isLiveSong(songs[startIndex])) {
+      return startIndex;
+    }
+    for (int i = 1; i < songs.length; i++) {
+      final idx = (startIndex + i) % songs.length;
+      if (!isLiveSong(songs[idx])) return idx;
+    }
+    return startIndex;
+  }
+
   /// 上次已按当前歌曲刷新过设置缓存的歌曲 id。
   ///
   /// 设置页改开关时会调 [refreshCrossfadeSettings]，但那条通路依赖设置页能拿到
@@ -3162,6 +3197,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_crossfadePreparing || _crossfadePreparedIndex != null) return;
     final nextIndex = _nextIndexForCrossfade();
     if (nextIndex == null) return;
+    // md3 fork：过滤 Live/现场——目标命中时放弃预混（未 prepared 时淡化
+    // 根本不会启动，自然播完走 next() 的过滤跳过），避免淡进 live 曲。
+    if (_skipLiveEnabled && isLiveSong(_playlist[nextIndex])) return;
     // AutoMix：先把过渡规划算出来 —— prepare 时就要用它的变速倍率。
     if (_automixEnabled) {
       await _planAutomixFor(nextIndex);
@@ -3751,6 +3789,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> playPlaylist(List<Song> songs, int startIndex) async {
     if (songs.isEmpty) return;
+    // 过滤 Live/现场——起播点校正（放在一起听门控之前，让判定基于最终
+    // 起播的那首）
+    startIndex = _liveFilteredStartIndex(songs, startIndex);
     // 一起听听众：房间内点播其他歌曲的确认窗（列表起播按点击曲目判定）
     final guestGate = _roomGuestPlayGate(songs[startIndex]);
     if (guestGate != null && !await guestGate) return;
@@ -3849,6 +3890,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> playOnlinePlaylist(List<Song> songs, int startIndex) async {
     if (songs.isEmpty) return;
+    // 过滤 Live/现场——起播点校正（同 playPlaylist，门控之前）
+    startIndex = _liveFilteredStartIndex(songs, startIndex);
     // 一起听听众：房间内点播其他歌曲的确认窗（列表起播按点击曲目判定）
     final guestGate = _roomGuestPlayGate(songs[startIndex]);
     if (guestGate != null && !await guestGate) return;
@@ -4070,6 +4113,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// 失败再回退到 /song/url，适配用户上传到云盘的音乐。
   Future<void> playCloudPlaylist(List<Song> songs, int startIndex) async {
     if (songs.isEmpty) return;
+    // 过滤 Live/现场——起播点校正（同 playPlaylist，门控之前）
+    startIndex = _liveFilteredStartIndex(songs, startIndex);
     // 一起听听众：云盘列表同样是「列表点击」入口
     final guestGate = _roomGuestPlayGate(songs[startIndex]);
     if (guestGate != null && !await guestGate) return;
@@ -5152,8 +5197,24 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 自动跳过无法获取播放链接的歌曲，直到找到可播放的或全部试过
     for (int i = 0; i < _playlist.length; i++) {
       final nextIndex = (_currentIndex + 1) % _playlist.length;
-      // 绕回起点：所有歌曲都试过了
-      if (nextIndex == startIndex) break;
+      // 绕回起点：所有歌曲都试过了。md3 fork：live 跳过只推游标不动
+      // _currentSong，全部试完仍失败时把游标锁回与 _currentSong 一致的
+      // 起播位（解析失败落定曲的路径本来就一致，不碰），避免队列高亮/
+      // 末尾判定/下次 crossfade 目标拿到脱钩索引。
+      if (nextIndex == startIndex) {
+        if (_currentSong == null ||
+            _playlist[_currentIndex].id != _currentSong!.id) {
+          _currentIndex = startIndex;
+        }
+        break;
+      }
+
+      // 过滤 Live/现场版本——只推进游标（下一轮 +1 从这里继续），不动
+      // 播放状态/历史/通知。
+      if (_skipLiveEnabled && isLiveSong(_playlist[nextIndex])) {
+        _currentIndex = nextIndex;
+        continue;
+      }
 
       _currentIndex = nextIndex;
       _currentSong = _playlist[nextIndex];
@@ -5227,6 +5288,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
 
+      // 过滤 Live/现场版本——只回退游标继续往前找，不动播放状态。
+      if (_skipLiveEnabled && isLiveSong(_playlist[prevIndex])) continue;
+
       _currentIndex = prevIndex;
       _currentSong = _playlist[prevIndex];
       _resolveError = null;
@@ -5252,6 +5316,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> playSongAt(int index) async {
     if (index < 0 || index >= _playlist.length) return;
+    // 过滤 Live/现场——点中 live 曲时自动移到下一个非 live 曲（全部 live
+    // 照常播）；重入目标必为非 live，环形一圈必停，无死循环。
+    if (_skipLiveEnabled && isLiveSong(_playlist[index])) {
+      final start = _liveFilteredStartIndex(_playlist, index);
+      if (start != index) return playSongAt(start);
+    }
     await _audioService?.resetAutomixRate(_speed);
     _automixPlan = null;
     _automixPlanSongId = null;

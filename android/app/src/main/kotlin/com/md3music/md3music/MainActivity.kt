@@ -579,7 +579,13 @@ class MainActivity : FlutterActivity() {
                     result.success(FloatingLyricService.isRunning && FloatingLyricService.viewAdded)
                 }
                 "setDesktopLyricConfig" -> {
-                    val intent = Intent(this, FloatingLyricService::class.java).apply {
+                    // MD3Music fork（悬浮窗黑框链，2026-10-19）：窗口不在时不再把
+                    // 服务拉起来——设置页「锁定歌词」等配置推送此前会无条件
+                    // startService，把一个谁都不会往里推词的空窗口建出来（黑框）。
+                    // 配置另存在 SharedPreferences，下次真正开启（enable() 随后
+                    // 会 _pushConfig 重推同一份）时自然生效。
+                    if (FloatingLyricService.isRunning && FloatingLyricService.viewAdded) {
+                        val intent = Intent(this, FloatingLyricService::class.java).apply {
                         action = FloatingLyricService.ACTION_SET_CONFIG
                         call.argument<Double>(FloatingLyricService.EXTRA_FONT_SIZE)?.let {
                             putExtra(FloatingLyricService.EXTRA_FONT_SIZE, it.toFloat())
@@ -620,8 +626,9 @@ class MainActivity : FlutterActivity() {
                         call.intArg(FloatingLyricService.EXTRA_CUSTOM_UNPLAYED)?.let {
                             putExtra(FloatingLyricService.EXTRA_CUSTOM_UNPLAYED, it)
                         }
+                        }
+                        startService(intent)
                     }
-                    startService(intent)
                     result.success(true)
                 }
                 "setPlaying" -> {

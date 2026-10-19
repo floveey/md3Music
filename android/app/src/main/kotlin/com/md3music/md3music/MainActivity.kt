@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.content.pm.PackageManager
 import android.annotation.TargetApi
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -18,6 +19,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.Display
 import android.os.VibratorManager
 import android.provider.Settings
 import android.util.Log
@@ -90,6 +92,9 @@ class MainActivity : FlutterActivity() {
         @Volatile private var kugouApiService: KugouApiService? = null
         // 频谱插件引用，Activity 销毁时释放 Visualizer
         @Volatile private var spectrumPlugin: SpectrumPlugin? = null
+
+        // MD3Music fork v21：车机卡片深链的冷启动残留（Dart 引擎未就绪时暂存）
+        @Volatile private var pendingOpenCardLyric = false
 
         // MV 画中画：Dart 端标记视频是否播放中（按 Home 自动进入画中画用）
         @Volatile private var pipVideoActive = false
@@ -234,8 +239,35 @@ class MainActivity : FlutterActivity() {
         // 桌面小部件冷启动拉起携带的动作（如登录卡 openLogin → 进登录页）。
         // 引擎尚未就绪时 Flutter 侧导航尚不可用，invokeMethod 静默失败即降级为打开 app。
         dispatchWidgetAction(intent?.getStringExtra("widget_action"))
+        // MD3Music fork v21 车机卡片：sessionActivity 深链（media card 点击），冷启动入口
+        maybeHandleOpenLyricIntent(intent)
         // 外部调用（文件管理器「用其他应用打开」等）：冷启动入口
         ExternalMediaBridge.onIntent(this, intent)
+    }
+
+    /**
+     * MD3Music fork v21 车机卡片深链：卡片点击走 sessionActivity（启动意图带
+     * md3_open_lyric_fullscreen 标记）且 Activity 跑在投屏虚拟屏（displayId≠主屏）
+     * 时才转发 Dart 打开全屏歌词——手机上点通知栏卡片（主屏）维持旧行为，
+     * 满足「只有车机有效」。
+     */
+    private fun maybeHandleOpenLyricIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("md3_open_lyric_fullscreen", false) != true) return
+        val dm = getSystemService(DisplayManager::class.java) ?: return
+        val projected = dm.displays.any { it.displayId != Display.DEFAULT_DISPLAY_ID }
+        if (!projected) return
+        pendingOpenCardLyric = true
+        dispatchOpenCardLyric()
+    }
+
+    private fun dispatchOpenCardLyric() {
+        val engine = FlutterEngineCache.getInstance().get("md3music_engine") ?: return
+        try {
+            MethodChannel(engine.dartExecutor.binaryMessenger, FLOATING_CHANNEL)
+                .invokeMethod("openCardLyricView", null)
+        } catch (_: Exception) {
+            // 引擎刚创建/未跑 Dart 时转发失败：留 pending 由 Dart postFrame 主动拉取
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -244,6 +276,8 @@ class MainActivity : FlutterActivity() {
         setIntent(intent)
         // singleTop 复用实例时（app 已在前台/后台存活），小部件动作走这里
         dispatchWidgetAction(intent.getStringExtra("widget_action"))
+        // MD3Music fork v21 车机卡片：热启动入口
+        maybeHandleOpenLyricIntent(intent)
         // 外部调用（文件管理器「用其他应用打开」等）：热启动入口
         ExternalMediaBridge.onIntent(this, intent)
     }
@@ -499,6 +533,12 @@ class MainActivity : FlutterActivity() {
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FLOATING_CHANNEL)
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
+                // MD3Music fork v21 车机卡片：冷启动残留深链在 Dart 侧主动拉取
+                "consumePendingOpenCardLyric" -> {
+                    val pending = pendingOpenCardLyric
+                    pendingOpenCardLyric = false
+                    result.success(pending)
+                }
                 "startFloatingLyric" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
                         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))

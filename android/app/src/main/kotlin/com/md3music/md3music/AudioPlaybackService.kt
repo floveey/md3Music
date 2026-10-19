@@ -107,6 +107,8 @@ class AudioPlaybackService : Service() {
         // 线控耳机媒体键（由 MediaButtonReceiver 转发，唤醒播放）
         const val ACTION_MEDIA_BUTTON = "com.md3music.md3music.ACTION_MEDIA_BUTTON"
         const val EXTRA_MEDIA_COMMAND = "mediaCommand"
+        /** MD3Music fork v21：唤醒来源标记——"car"=车机绑定触发（放开媒体会话创建） */
+        const val EXTRA_WAKE_ORIGIN = "wakeOrigin"
 
         private const val TAG = "AudioPlaybackService"
 
@@ -999,6 +1001,9 @@ class AudioPlaybackService : Service() {
 
     // 蓝牙歌词兼容状态。保留通道与设置，但共享 MediaSession 始终使用真实歌曲身份。
     private var bluetoothLyricEnabled = false
+
+    /** MD3Music fork v21：本次派发是否来自车机绑定唤醒（唤醒时放开媒体会话创建） */
+    private var wakeFromCarBind = false
     private var currentBtLyricText = ""
     @Volatile
     private var originalMediaId = ""
@@ -1259,6 +1264,9 @@ class AudioPlaybackService : Service() {
                 // 调用 startForeground，否则 Android 12+ 会抛 ForegroundServiceDidNotStartInTimeException）
                 ensureForeground()
                 val command = intent?.getStringExtra(EXTRA_MEDIA_COMMAND) ?: "play"
+                // MD3Music fork v21：记录唤醒来源——"car"=车机绑定触发，headless 引擎
+                // 里要放开媒体会话创建（否则恢复了播放车机卡片也是空的）。
+                wakeFromCarBind = intent?.getStringExtra(EXTRA_WAKE_ORIGIN) == "car"
                 handleMediaButtonCommand(command)
                 return START_STICKY
             }
@@ -1609,7 +1617,9 @@ class AudioPlaybackService : Service() {
     private fun createHeadlessEngineAndDispatch() {
         // MD3Music fork（方向1）：headless 引擎帧的播放器不创建媒体3会话，
         // 使系统仅暴露前台 UI 播放器的会话，杜绝「媒体卡片暂停 vs app 内播放」不同步。
-        try { AudioPlayer.setMediaSessionEnabled(false) } catch (_: Throwable) {}
+        // MD3Music fork v21（连车拉起）：车机绑定唤醒的派发例外——演示恢复态没有
+        // 会话车机卡片就是空的，此时放开会话创建（引擎复用机制保证无双引擎冲突）。
+        try { AudioPlayer.setMediaSessionEnabled(wakeFromCarBind) } catch (_: Throwable) {}
         val engineLatch = CountDownLatch(1)
         val creationRequest = CancellableMainThreadTask()
         val createdEngine = arrayOfNulls<FlutterEngine>(1)

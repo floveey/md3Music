@@ -61,6 +61,8 @@ class MediaNotificationService {
   static void Function()? onWidgetFmOpenLogin;
   // 屏幕亮灭（FloatingLyricService SCREEN_OFF/ON 广播转发）
   static void Function(bool on)? onScreenStateChanged;
+  // MD3Music fork v21：车机卡片点入（投屏屏判据由原生侧把控），直达全屏歌词
+  static void Function()? onOpenCardLyric;
   static final MediaCommandAckRouter _mediaCommandAckRouter =
       MediaCommandAckRouter();
 
@@ -84,6 +86,17 @@ class MediaNotificationService {
     if (callback == null) return false;
     callback();
     return true;
+  }
+
+  /// MD3Music fork v21 车机卡片：冷启动残留深链拉取——MainActivity 在引擎
+  /// 未就绪时只置 pending，这里在根导航就绪后主动取一次。
+  static Future<bool> consumePendingOpenCardLyric() async {
+    try {
+      final r = await _channel.invokeMethod<bool>('consumePendingOpenCardLyric');
+      return r ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static void initCallbacks() {
@@ -122,6 +135,9 @@ class MediaNotificationService {
         case 'setLoopMode':
           final mode = call.arguments as String?;
           if (mode != null) onSetLoopMode?.call(mode);
+          break;
+        case 'openCardLyricView':
+          onOpenCardLyric?.call();
           break;
         case 'toggleDesktopLyric':
           onToggleDesktopLyric?.call();

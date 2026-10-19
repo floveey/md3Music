@@ -25,6 +25,7 @@ import 'core/remote/tv_focus_highlight.dart';
 import 'core/services/external_media_intent_service.dart';
 import 'core/services/fm_widget_sync.dart';
 import 'core/services/lyricon_provider_service.dart';
+import 'core/services/media_notification_service.dart';
 import 'core/services/music_haptics_service.dart';
 import 'core/services/startup_auto_play.dart';
 import 'core/theme/app_theme.dart';
@@ -356,6 +357,12 @@ class _AppViewState extends State<_AppView> {
       // 并主动拉取一次冷启动期间原生侧积压的待处理音频
       // ignore: discarded_futures
       ExternalMediaIntentService.instance.start();
+      // MD3Music fork v21 车机卡片：点系统媒体卡片直达全屏歌词。冷启动残留
+      // （引擎未就绪时原生只置 pending）在本帧根导航就绪后拉取一次。
+      MediaNotificationService.onOpenCardLyric = _openFullPlayerOnLyrics;
+      unawaited(MediaNotificationService.consumePendingOpenCardLyric().then((pending) {
+        if (pending) _openFullPlayerOnLyrics();
+      }));
     });
     // 预测性返回 + 封面连贯过渡：两个开关互斥，冷启动一起载入并纠正历史同开的值
     // （裁决见 resolveCoverBackExclusivity，封面连贯过渡优先）。
@@ -370,6 +377,14 @@ class _AppViewState extends State<_AppView> {
       player: context.read<PlayerProvider>(),
       favorites: context.read<FavoritesProvider>(),
     );
+  }
+
+  /// MD3Music fork v21 车机卡片：直达全屏歌词页。预置「歌词页」为初始 tab——
+  /// 窄屏页身份的歌词下标是 2，宽屏由 _syncTabLayout 按页身份自动换算，不用管
+  /// 横竖屏差异；歌的播放状态保持不变（只是看词，不会顺手开始播放）。
+  void _openFullPlayerOnLyrics() {
+    playerTabIndex.value = 2;
+    openFullPlayer(context);
   }
 
   /// 根据 ShortcutConfigProvider 当前配置，整体替换 Android 桌面快捷方式列表。

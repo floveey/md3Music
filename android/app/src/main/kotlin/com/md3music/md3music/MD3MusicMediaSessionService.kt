@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -25,6 +26,19 @@ import com.ryanheise.just_audio.AudioPlayer
 @OptIn(UnstableApi::class)
 @SuppressLint("UnsafeOptInUsageError")
 class MD3MusicMediaSessionService : MediaSessionService() {
+
+    /** 连车唤醒：外部 bind 且无活跃会话时自动拉起+续播（咪咕式），默认开 */
+    private var autoWakeEnabled = true
+    /** 上次触发改唤醒的时刻（节流防重试风暴） */
+    private var lastCarWakeAt = 0L
+
+    override fun onCreate() {
+        super.onCreate()
+        autoWakeEnabled = try {
+            getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                .getBoolean("flutter.settings_autoplay_on_car_connect", true)
+        } catch (_: Exception) { true }
+    }
 
     override fun onCreate() {
         // 所有机型都安装本 App 的媒体通知 Provider：底层仍是 media3 默认实现，额外做两件事
@@ -107,12 +121,50 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // vivo action 落 default 分支返回 null → 绑定失败 → 原子拿不到 session
         // （无歌词、无封面、无进度条）。把 vivo action 映射到 legacy MediaBrowserService
         // 路径（返回 legacy browser binder，原子经 MediaControllerCompat 读取）。
+        maybeWakeForCarConnect(intent?.action)
         if (intent?.action == "com.vivo.musicwidgetmix.support.service") {
             return super.onBind(
                 Intent("android.media.browse.MediaBrowserService")
             )
         }
         return super.onBind(intent)
+    }
+
+    /**
+     * MD3Music fork v21（连车拉起，咪咕式）：外部 bind 且当前没有任何活跃媒体会话，
+     * 等价于"车机来了但 App 还什么都没有"——走既有线控唤醒链拉起进程并自动续播。
+     * 排除项：原子随身听的 vivo 专用 action（进程活着时它常驻绑定，放行会变成变相
+     * 开机自播）；15s 节流防重试风暴；flutter.settings_autoplay_on_car_connect 默认
+     * 开可关。拉起链：startForegroundService(AudioPlaybackService, ACTION_MEDIA_BUTTON,
+     * command="play", wakeOrigin=car) → ensureForeground → headless 引擎恢复 →
+     * playerReady 后派发 play（同时头侧按 wakeOrigin 放开媒体会话创建，车机卡片
+     * 才有内容）。
+     */
+    private fun maybeWakeForCarConnect(action: String?) {
+        if (action == "com.vivo.musicwidgetmix.support.service") return
+        if (!autoWakeEnabled) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastCarWakeAt < 15_000L) return
+        if (AudioPlayer.getActiveMediaSession() != null) return
+        lastCarWakeAt = now
+        Log.i(
+            "CarAutoResume",
+            "external bind action=$action without active session → wake & auto play"
+        )
+        val svc = Intent(this, AudioPlaybackService::class.java).apply {
+            this.action = AudioPlaybackService.ACTION_MEDIA_BUTTON
+            putExtra(AudioPlaybackService.EXTRA_MEDIA_COMMAND, "play")
+            putExtra(AudioPlaybackService.EXTRA_WAKE_ORIGIN, "car")
+        }
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(svc)
+            } else {
+                startService(svc)
+            }
+        } catch (t: Throwable) {
+            Log.w("CarAutoResume", "wake dispatch failed", t)
+        }
     }
 
     override fun onDestroy() {

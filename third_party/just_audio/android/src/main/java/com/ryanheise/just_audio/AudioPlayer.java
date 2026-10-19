@@ -1224,6 +1224,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 android.content.Intent launch =
                         context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
                 if (launch != null) {
+                    // MD3Music fork v21（车机卡片）：媒体卡片/通知点击走这里——携带深链
+                    // 标记，由 MainActivity 在投屏虚拟屏上识别并直达全屏歌词（手机主屏
+                    // 维持旧行为）。
+                    launch.putExtra("md3_open_lyric_fullscreen", true);
                     android.app.PendingIntent activityIntent = android.app.PendingIntent.getActivity(
                             context, 0, launch,
                             android.app.PendingIntent.FLAG_UPDATE_CURRENT

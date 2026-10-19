@@ -85,6 +85,16 @@ dev_dependencies:
   analyzer: ^10.2.0
   video_player_platform_interface: ^6.9.0
 
+dependency_overrides:
+  shared_preferences_android: 2.4.28
+  # 2026-10-19 全黑屏回归：仓库不提交 pubspec.lock，CI 每次全量重解析。
+  # shared_preferences_android 2.5.0（2026-10-17 发布）重新生成的 Pigeon Kotlin
+  # 与 shared_preferences 2.5.6 的 Dart 调用不匹配——运行期
+  # NoSuchMethodError: SharedPreferencesApiRegistrar.getAll(...)Continuation，
+  # Equalizer/Viper 各自吞掉错误后，LyricPreferences 等无保护的 load() 让
+  # runBootstrap 在 runApp 之前死掉（splash 后永久黑屏）。钉回验证可用的
+  # 2.4.28（10-16 构建解析到的版本），等同临时补上 lock 的功能。
+
 flutter:
   uses-material-design: true
   assets:

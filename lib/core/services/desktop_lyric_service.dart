@@ -104,6 +104,9 @@ class DesktopLyricService {
   DesktopLyricService._() {
     // AM 歌词偏好变化（字号/行距/字重/字体/副行/动态取色）→ 锁屏歌词跟随重推
     LyricPreferences.instance.addListener(_onLyricPrefsChangedForLockScreen);
+    // md3 fork（#147 恢复链第二环）：巡检「原生窗口在跑而 Dart 侧认为关」，
+    // 任何入口开的悬浮窗都能在 5s 内自动接上歌词推送（见 _probeNativeWindow）。
+    _startNativeSyncProbe();
   }
 
   PlayerProvider? _player;
@@ -705,6 +708,9 @@ class DesktopLyricService {
   Future<void> disable() async {
     if (!_enabled) return;
     _enabled = false;
+    // 记录主动关闭时刻：原生 stop 反映到 isRunning 有延迟，
+    // 巡检用它避开「刚关窗又被误判成待恢复」的竞态窗口。
+    _lastDisabledAt = DateTime.now();
     _updateTicker();
     _cancelLineTimer();
     _cancelFlymeLineTimer();
@@ -738,6 +744,40 @@ class DesktopLyricService {
     _syncCurrentFromPlayer();
     _updateTicker();
     _notify();
+  }
+
+  // ── 原生窗口巡检（md3 fork：#147 恢复链第二环）──
+  //
+  // 启动悬浮窗的入口不止 Dart 的 toggle()：通知栏按钮、悬浮窗原生面板、
+  // 无头引擎路径等都可能把窗口开起来，而它们不经过 enable() 抬起
+  // _enabled——表现为「窗口在、永远没词」。这里 5s 一检：发现「原生窗口
+  // 在显示而 Dart 侧认为关」就走 [restoreFloatingFromNative] 把推送链
+  // 续上，任何入口 5s 内自愈，与具体入口解耦。
+  //
+  // 窗口不在时本探测只是一次返回 bool 的通道调用，代价可忽略；平台无
+  // 该方法（如 Windows 某些宿主）时入口抛 MissingPluginException 被
+  // 吞掉，探测退化为空操作。
+  Timer? _nativeSyncProbe;
+  DateTime? _lastDisabledAt;
+
+  void _startNativeSyncProbe() {
+    _nativeSyncProbe ??= Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _probeNativeWindow(),
+    );
+  }
+
+  Future<void> _probeNativeWindow() async {
+    if (_enabled) return;
+    final last = _lastDisabledAt;
+    if (last != null && DateTime.now().difference(last).inSeconds < 3) {
+      return;
+    }
+    try {
+      if (await MediaNotificationService.isFloatingLyricWindowRunning()) {
+        await restoreFloatingFromNative();
+      }
+    } catch (_) {}
   }
 
   /// 蓝牙歌词开关：独立于悬浮窗。开启后定时器运行以获取当前歌词行，

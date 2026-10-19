@@ -579,8 +579,13 @@ class MainActivity : FlutterActivity() {
                     result.success(FloatingLyricService.isRunning && FloatingLyricService.viewAdded)
                 }
                 "setDesktopLyricConfig" -> {
-                    val intent = Intent(this, FloatingLyricService::class.java).apply {
-                        action = FloatingLyricService.ACTION_SET_CONFIG
+                    // 窗口不在时不再把服务拉起来：设置页「锁定歌词」等配置推送
+                    // 此前会无条件 startService，把一个谁都不会往里推词的空窗口
+                    // 建出来（黑框）。配置本来会落 SharedPreferences，下次真正
+                    // 开启（enable 随后会推同一份配置）时自然生效。
+                    if (FloatingLyricService.isRunning && FloatingLyricService.viewAdded) {
+                        val intent = Intent(this, FloatingLyricService::class.java).apply {
+                            action = FloatingLyricService.ACTION_SET_CONFIG
                         call.argument<Double>(FloatingLyricService.EXTRA_FONT_SIZE)?.let {
                             putExtra(FloatingLyricService.EXTRA_FONT_SIZE, it.toFloat())
                         }
@@ -620,8 +625,9 @@ class MainActivity : FlutterActivity() {
                         call.intArg(FloatingLyricService.EXTRA_CUSTOM_UNPLAYED)?.let {
                             putExtra(FloatingLyricService.EXTRA_CUSTOM_UNPLAYED, it)
                         }
+                        }
+                        startService(intent)
                     }
-                    startService(intent)
                     result.success(true)
                 }
                 "setPlaying" -> {

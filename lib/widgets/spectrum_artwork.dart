@@ -210,17 +210,21 @@ class _SpectrumArtworkState extends State<SpectrumArtwork>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final bool muted = !TickerMode.valuesOf(context).enabled;
-    if (muted == _tickerModeMuted) return;
-    _tickerModeMuted = muted;
+    // 不做「状态未变即早退」：子树 deactivate→重新插入（GlobalKey 重挂、部分
+    // 路由动画期间）后没有任何重绑回调，这里每次都走一遍 _syncFrameDriverBindings
+    //（幂等，已绑定则原样返回），避免复用场景帧驱动永久丢失。
+    _tickerModeMuted = !TickerMode.valuesOf(context).enabled;
     _syncFrameDriverBindings();
   }
 
   /// 后台/熄屏时引擎不合成帧，两个订阅一并停掉（§10.4.3）。
+  ///
+  /// md3 fork 口径：inactive（车机投屏、通知栏下拉等「可见无焦点」）下引擎
+  /// 照常合成帧，不算挂起——停掉会让投屏场景频谱/封面冻结；与
+  /// MusicHapticsService 的前端口径一致。
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final bool suspended = state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached;
     if (suspended == _appSuspended) return;

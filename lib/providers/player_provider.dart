@@ -5197,11 +5197,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 自动跳过无法获取播放链接的歌曲，直到找到可播放的或全部试过
     for (int i = 0; i < _playlist.length; i++) {
       final nextIndex = (_currentIndex + 1) % _playlist.length;
-      // 绕回起点：所有歌曲都试过了
-      if (nextIndex == startIndex) break;
+      // 绕回起点：所有歌曲都试过了。md3 fork：live 跳过只推游标不动
+      // _currentSong，全部试完仍失败时把游标锁回与 _currentSong 一致的
+      // 起播位（解析失败落定曲的路径本来就一致，不碰），避免队列高亮/
+      // 末尾判定/下次 crossfade 目标拿到脱钩索引。
+      if (nextIndex == startIndex) {
+        if (_currentSong == null ||
+            _playlist[_currentIndex].id != _currentSong!.id) {
+          _currentIndex = startIndex;
+        }
+        break;
+      }
 
       // md3 fork：过滤 Live/现场版本 —— 只推进游标（下一轮 +1 从这里继续），
-      // 不动播放状态/历史/通知；全部候选被略过则绕回起点 break 自然停止。
+      // 不动播放状态/历史/通知。
       if (_skipLiveEnabled && isLiveSong(_playlist[nextIndex])) {
         _currentIndex = nextIndex;
         continue;
@@ -5233,9 +5242,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 无法获取链接，继续尝试下一首
       _resolveError = _resolveErrorText(_currentSong);
 
-      // 非列表循环模式下，到末尾就停止尝试
+      // 非列表循环模式下，到末尾就停止尝试（同上：live 跳过的游标锁回）
       if (_currentIndex >= _playlist.length - 1 &&
           _loopMode != AppLoopMode.all) {
+        if (_currentSong == null ||
+            _playlist[_currentIndex].id != _currentSong!.id) {
+          _currentIndex = startIndex;
+        }
         break;
       }
     }

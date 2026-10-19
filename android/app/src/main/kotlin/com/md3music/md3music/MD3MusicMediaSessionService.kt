@@ -33,14 +33,6 @@ class MD3MusicMediaSessionService : MediaSessionService() {
     private var lastCarWakeAt = 0L
 
     override fun onCreate() {
-        super.onCreate()
-        autoWakeEnabled = try {
-            getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                .getBoolean("flutter.settings_autoplay_on_car_connect", true)
-        } catch (_: Exception) { true }
-    }
-
-    override fun onCreate() {
         // 所有机型都安装本 App 的媒体通知 Provider：底层仍是 media3 默认实现，额外做两件事
         // —— 统一设单色小图标（所有机型保留）；仅 Flyme 系把歌词写进媒体通知的 tickerText。
         // 必须在 onCreate() 返回前设置（fork 源码 MediaSessionService:594 的约束）。
@@ -53,6 +45,11 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         super.onCreate()
         // 注册为 fork 的会话 host：fork 创建/已有活跃会话后 addSession 到本服务渲染通知
         AudioPlayer.setMediaSessionServiceHost(this)
+        // MD3Music fork v21（连车拉起）：读取外部绑定时自动拉起+续播的开关
+        autoWakeEnabled = try {
+            getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                .getBoolean("flutter.settings_autoplay_on_car_connect", true)
+        } catch (_: Exception) { true }
     }
 
     override fun onGetSession(info: MediaSession.ControllerInfo): MediaSession? {

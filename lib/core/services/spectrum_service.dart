@@ -121,6 +121,9 @@ class SpectrumService with WidgetsBindingObserver {
   DateTime? _lastRecoveryAt;
   int _sessionId = 0;
 
+  /// 看门狗 500ms 拍计数：攒满 10 拍打一条诊断行（约 5s）。
+  int _watchBeats = 0;
+
   /// 原生端是否允许挂 Visualizer 兜底（透传给 Kotlin，重绑时沿用）。
   bool _visualizerFallback = true;
   bool _recovering = false;
@@ -175,9 +178,20 @@ class SpectrumService with WidgetsBindingObserver {
       return true;
     }
     _running = true;
+    // md3 fork：start 只由「正在播放」路径调起（播放页 _tryStartSpectrum 有
+    // isPlaying 守卫，音乐震动 acquire 后会按真实状态回写）。上一段遗留的暂停
+    // 门控若不在此复位，重启后要等下一次 provider notify 才有人纠正——期间
+    // 频谱以「假暂停」冻住（车机投屏切页后「复活→又冻」的叠加因素）。
+    _isPlaying = true;
+    _gateZero = false;
     WidgetsBinding.instance.addObserver(this);
     final lifecycle = WidgetsBinding.instance.lifecycleState;
-    _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
+    // md3 fork 口径：inactive（可见无焦点——车机投屏/浮窗/通知栏下拉）引擎
+    // 照常出帧，算前台，与 MusicHapticsService 一致。
+    _foreground =
+        lifecycle == null ||
+        lifecycle == AppLifecycleState.resumed ||
+        lifecycle == AppLifecycleState.inactive;
     _sessionId = audioSessionId ?? 0;
     _visualizerFallback = visualizerFallback;
     _lastRecoveryAt = DateTime.now();
@@ -228,7 +242,21 @@ class SpectrumService with WidgetsBindingObserver {
   void _watchData() {
     _fallbackTimer?.cancel();
     _fallbackTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (!_running || !_isPlaying || !_foreground) return;
+      if (!_running) return;
+      // md3 fork 诊断行：每 5s 一条看门狗状态，冻结窗口内可直接定位哪道门
+      // 卡住（fg / playing / gateZero / simulated / 数据陈旧时长）。
+      if (++_watchBeats >= 10) {
+        _watchBeats = 0;
+        final last = _lastFftAt;
+        final staleMs = last == null
+            ? -1
+            : DateTime.now().difference(last).inMilliseconds;
+        DiagnosticLogger.instance.info(
+          '[Spectrum] watch: fg=$_foreground playing=$_isPlaying '
+          'gate=$_gateZero sim=$_simulated stale=${staleMs}ms',
+        );
+      }
+      if (!_isPlaying || !_foreground) return;
       if (_simulated) {
         if (_isAndroid &&
             !_recovering &&
@@ -256,7 +284,11 @@ class SpectrumService with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
+    // md3 fork 口径：inactive 算前台（可见无焦点时引擎照常出帧），只有真正
+    // 退后台/熄屏才收回前台——否则车机投屏场景看门狗永远睡着，断流无人恢复。
+    _foreground =
+        state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive;
     if (!_foreground || !_running) return;
     // 熄屏期间系统可能回收采集资源，亮屏后主动重绑，不能依赖页面的 started 标记。
     _lastFftAt = DateTime.now();

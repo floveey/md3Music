@@ -1078,6 +1078,21 @@ class SettingsRepository {
     await prefs.setBool(_keyAutomixEnabled, value);
   }
 
+  // ===== 过滤 Live/现场版本（MD3 fork）=====
+  static const String _keySkipLiveEnabled = 'settings_skip_live_enabled';
+
+  /// 过滤 Live/现场版本。开启后自动连播/列表起播/队列点选自动跳过标题命中
+  /// Live/现场的歌曲（手动单独点播一首不受影响）。
+  Future<bool> getSkipLiveEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keySkipLiveEnabled) ?? false;
+  }
+
+  Future<void> setSkipLiveEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keySkipLiveEnabled, value);
+  }
+
   // ===== 音量均衡（响度归一） =====
   static const String _keyVolumeNormalizationEnabled =
       'settings_volume_normalization_enabled';

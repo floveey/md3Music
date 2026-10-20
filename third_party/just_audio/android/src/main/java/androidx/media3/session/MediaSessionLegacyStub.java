@@ -260,7 +260,12 @@ import org.checkerframework.checker.initialization.qual.Initialized;
       this::refreshLegacyProgressWhilePlaying;
 
   private void refreshLegacyProgressWhilePlaying() {
-    if (!sessionImpl.getPlayerWrapper().isPlaying()) {
+    // MD3Music fork v25：补一道 isReleased 门禁，与
+    // MediaSessionImpl#notifyPeriodicSessionPositionInfoChangesOnHandler 的 closed
+    // 检查同源（closed 在 release() 落位）。removeCallbacksAndMessages 只摘已入队
+    // 回调，跨线程交错时正在执行的实例会在摘除后自行 postDelayed 重启；有这道门，
+    // 下一轮直接自熄。
+    if (sessionImpl.isReleased() || !sessionImpl.getPlayerWrapper().isPlaying()) {
       return;
     }
     updateLegacySessionPlaybackState(sessionImpl.getPlayerWrapper());

@@ -4283,15 +4283,13 @@ public class MediaSessionCompat {
             fwkBuilder.putLong(VMM_SUPPORT_EVENT, VMM_SUPPORT_EVENT_VALUE);
             fwkMetadata = fwkBuilder.build();
           }
-          // MD3Music fork v20：恢复整段歌词的顶层键提升与即时 lrc_change（v18 把本段
-          // 包在 if(false) 里的前提已变化）。JoviCar 投屏车机实测：切歌时只收到
-          // extras 整段歌词没有进度 → 车机把它当整块滚动，"倒退"了。整段 LRC +
-          // PlaybackState 进度自动滚动。的多行模式（对照酷我把我把整首提升为顶层键的
-          // 写法），车机优先读顶层键；v18 关闭时坏掉的是 bitmap+歌词大字符串组合把原子
-          // 端封面降为 1x1 平均色（v12-v17 实测），而 v19 已全剥 bitmap 只留 URI，组合
-          // 前提不存在，剥离逻辑真机验证时注意原子随身听端封面是否仍正常（若封面再出现
-          // 纯色优先回滚本段，而不是回退加 bitmap）。
-          if (wholeLrc != null && !wholeLrc.isEmpty()) {
+          // MD3Music fork v18：metadata 不再携带整段歌词（UCAR_LYRICS_WHOLE/LYRICS_STATUS
+          // 移除）。对照音哩音哩（metadata 1 bitmap + 11 键无大字符串，封面完整到达），
+          // 我们的 metadata bitmap+歌词大字符串 → 原子端封面被降为 1x1 平均色（v12-v17
+          // 全部实测）。歌词照走 lrc_change extras 事件（c0 控制器消费，已验证）。
+          // 车机多行歌词实测不依赖本顶层键（ef77080 顶层键关闭状态下仍常驻多行，三绿），
+          // 所以保持关闭，不要为"多行"打开它。
+          if (false && wholeLrc != null && !wholeLrc.isEmpty()) {
             // v18：metadata 歌词键停用（见上方注释）。保留分支结构便于回滚。
             MediaMetadata.Builder fwkBuilder = new MediaMetadata.Builder(fwkMetadata);
             fwkBuilder.putString(UCAR_LYRICS_WHOLE, wholeLrc);

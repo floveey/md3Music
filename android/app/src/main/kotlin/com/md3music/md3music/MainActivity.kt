@@ -254,7 +254,7 @@ class MainActivity : FlutterActivity() {
     private fun maybeHandleOpenLyricIntent(intent: Intent?) {
         if (intent?.getBooleanExtra("md3_open_lyric_fullscreen", false) != true) return
         val dm = getSystemService(DisplayManager::class.java) ?: return
-        val projected = dm.displays.any { it.displayId != Display.DEFAULT_DISPLAY_ID }
+        val projected = dm.displays.any { it.displayId != Display.DEFAULT_DISPLAY }
         if (!projected) return
         pendingOpenCardLyric = true
         dispatchOpenCardLyric()

@@ -247,8 +247,59 @@ import org.checkerframework.checker.initialization.qual.Initialized;
     sessionCompat.setActive(true);
   }
 
+  // MD3Music fork v22（车机歌词对轴）：车机（ucar/JoviCar）拿到整段 LRC 后自己按
+  // PlaybackState 进度滚动，播放进度就是它的时钟基准。而 legacy 会话的 PlaybackState
+  // 此前只在离散事件（切歌/暂停/seek/换播放器）时才刷新，播放中一路冻结 —— 车机拿着
+  // 一个不动的进度去滚 LRC，歌词与歌声自然对不上（手机端用自己的 position 逐行算，
+  // 所以手机同步、车机不同步）。
+  // 这里在播放中按固定节奏补刷 legacy 播放态：进度由 createPlaybackStateCompat()
+  // 现取，position 带 lastPositionUpdateTime，外推后车机拿到的就是当前进度。
+  private static final long LEGACY_PROGRESS_REFRESH_INTERVAL_MS = 500;
+
+  private final Runnable legacyProgressRefreshRunnable =
+      this::refreshLegacyProgressWhilePlaying;
+
+  private void refreshLegacyProgressWhilePlaying() {
+    if (!sessionImpl.getPlayerWrapper().isPlaying()) {
+      return;
+    }
+    updateLegacySessionPlaybackState(sessionImpl.getPlayerWrapper());
+    // MD3Music fork v22（诊断）：车机滚 LRC 的时钟基准就是这条进度。下轮实测抓
+    // logcat 过滤 MD3CarLyrics，能直接看出「车机看到的进度」是否在走、走得对不对。
+    PlaybackStateCompat state = sessionImpl.getPlayerWrapper().createPlaybackStateCompat();
+    android.util.Log.i(
+        "MD3CarLyrics",
+        "legacy progress refresh: state=" + state.getState()
+            + " pos=" + state.getPosition()
+            + " speed=" + state.getPlaybackSpeed());
+    sessionImpl
+        .getApplicationHandler()
+        .postDelayed(legacyProgressRefreshRunnable, LEGACY_PROGRESS_REFRESH_INTERVAL_MS);
+  }
+
+  /**
+   * MD3Music fork v22：启动/停止播放中的 legacy 进度补刷。
+   *
+   * <p>与 {@link #onIsPlayingChanged} 的离散刷新互补：那个只在开始/结束时触发，这里
+   * 保证播放期间进度持续更新（车机滚 LRC 的时钟基准）。
+   */
+  private void startLegacyProgressRefresh() {
+    sessionImpl.getApplicationHandler().removeCallbacks(legacyProgressRefreshRunnable);
+    if (sessionImpl.getPlayerWrapper().isPlaying()) {
+      sessionImpl
+          .getApplicationHandler()
+          .postDelayed(legacyProgressRefreshRunnable, LEGACY_PROGRESS_REFRESH_INTERVAL_MS);
+    }
+  }
+
+  private void stopLegacyProgressRefresh() {
+    sessionImpl.getApplicationHandler().removeCallbacks(legacyProgressRefreshRunnable);
+  }
+
   @SuppressWarnings("PendingIntentMutability") // We can't use SaferPendingIntent.
   public void release() {
+    // MD3Music fork v22：会话释放时停掉进度补刷，避免 handler 回调悬空。
+    stopLegacyProgressRefresh();
     if (Util.SDK_INT < 31) {
       if (broadcastReceiverComponentName == null) {
         // No broadcast receiver available. Playback resumption not supported.
@@ -1164,11 +1215,17 @@ import org.checkerframework.checker.initialization.qual.Initialized;
 
     @Override
     public void onPlayWhenReadyChanged(
-        int seq, boolean playWhenReady, @Player.PlaybackSuppressionReason int reason)
+        int seq, boolean playWhenReady, @Player.PlaybackSuppressionReason reason)
         throws RemoteException {
       // Note: This method does not use any of the given arguments.
       updateLegacySessionPlaybackState(sessionImpl.getPlayerWrapper());
+      // MD3Music fork v22：开播瞬间就起进度补刷（isPlaying 的翻转可能稍晚到达，
+      // playWhenReady 更早，覆盖「连车自动续播」这类冷启动场景）。
+      if (playWhenReady) {
+        startLegacyProgressRefresh();
+      }
     }
+
 
     @Override
     public void onPlaybackSuppressionReasonChanged(
@@ -1187,6 +1244,12 @@ import org.checkerframework.checker.initialization.qual.Initialized;
     @Override
     public void onIsPlayingChanged(int seq, boolean isPlaying) throws RemoteException {
       updateLegacySessionPlaybackState(sessionImpl.getPlayerWrapper());
+      // MD3Music fork v22：播放开始/结束决定进度补刷的开关（车机歌词对轴用）。
+      if (isPlaying) {
+        startLegacyProgressRefresh();
+      } else {
+        stopLegacyProgressRefresh();
+      }
     }
 
     @Override

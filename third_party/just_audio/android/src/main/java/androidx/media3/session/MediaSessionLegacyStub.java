@@ -1215,7 +1215,7 @@ import org.checkerframework.checker.initialization.qual.Initialized;
 
     @Override
     public void onPlayWhenReadyChanged(
-        int seq, boolean playWhenReady, @Player.PlaybackSuppressionReason reason)
+        int seq, boolean playWhenReady, @Player.PlaybackSuppressionReason int reason)
         throws RemoteException {
       // Note: This method does not use any of the given arguments.
       updateLegacySessionPlaybackState(sessionImpl.getPlayerWrapper());

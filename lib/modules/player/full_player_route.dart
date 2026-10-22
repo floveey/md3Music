@@ -151,12 +151,15 @@ double playerMiniBarHeight() {
 /// 让覆盖层从这个信号取初始下标，两个问题一起消掉。
 final ValueNotifier<int> playerTabIndex = ValueNotifier<int>(1);
 
-/// dockMode（车机面板常驻播放器）实例的**歌词指挥口**，卡片深链专用。
+/// 播放页在场的**歌词指挥口**，卡片深链专用（v28e 起所有播放页实例都接管）。
 ///
-/// `openFullPlayer` 对车机模式直接短路（面板已常驻一个播放器实例，再 push
-/// 一个全屏路由会两套各驱动歌词/进度动画、整页帧率翻倍），所以车机模式下
-/// 「车机点媒体卡片直达歌词页」不能走 push，只能把命令转交给面板内那个
-/// dockMode 实例自身切换到 `_tabLayout.lyricsIndex`。
+/// 车机模式下 `openFullPlayer` 直接短路（面板已常驻一个 dockMode 实例，
+/// 再 push 全屏路由会两套各驱动歌词/进度动画、帧率翻倍），「车机点媒体卡片
+/// 直达歌词页」不能走 push，只能把命令交给在场实例切歌词。v28e 实测后把
+/// 全屏路由实例（含拖拽覆盖层）也纳入接管：全屏路由已开着时点卡片，
+/// openFullPlayer 对存量路由只会"带回栈顶"而不切 tab——由在场实例当场
+/// 消费命令补上这一刀。多实例并存时各自切页（幂等 UI 更新，不创建新实例）；
+/// 后注册者覆盖指针（最新在场的活跃实例），dispose 判属注销。
 ///
 /// 抽象成 `void Function()`（而不是下标）：播放页窄屏结构的实际顺序是
 /// [playlist, cover, lyrics, …]（下标 2 恰为歌词），但顺序随宽窄屏与
@@ -164,9 +167,8 @@ final ValueNotifier<int> playerTabIndex = ValueNotifier<int>(1);
 /// （`lyricsIndex`，见 player_tab_layout），调用方只表达"切歌词"语义，
 /// 不写死任何下标。
 ///
-/// 注册即接管：dockMode 实例 initState 注册、dispose 注销（用引用所属判定，
-/// 防拆掉后来者）。没有在场实例（车机模式关/面板被抑制页收起）时发送是
-/// **no-op**——不会凭空拉起任何页面，等下一次卡片点击再试。
+/// 没有在场实例（无路由、无面板）时发送是 **no-op**——不会凭空拉起任何
+/// 页面，等下一次卡片点击再试。
 typedef void PlayerLyricsCommandHandler();
 
 PlayerLyricsCommandHandler? dockPlayerLyricsCommand;

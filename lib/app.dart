@@ -408,6 +408,10 @@ class _AppViewState extends State<_AppView> {
       return;
     }
     playerTabIndex.value = 2;
+    // MD3Music fork v28e：全屏路由已开着时 openFullPlayer 对存量路由只能
+    // "带回栈顶"，不会切 tab——先发命令让在场实例（含存量路由与拖拽覆盖层）
+    // 当场切歌词，再照常 push/popUntil，三种形态都落在歌词页。
+    sendDockPlayerLyricsCommand();
     openFullPlayer(navContext);
   }
 

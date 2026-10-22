@@ -383,23 +383,33 @@ class _AppViewState extends State<_AppView> {
   /// 窄屏页身份的歌词下标是 2，宽屏由 _syncTabLayout 按页身份自动换算，不用管
   /// 横竖屏差异；歌的播放状态保持不变（只是看词，不会顺手开始播放）。
   ///
-  /// MD3Music fork v28：车机模式分流。`openFullPlayer` 对车机模式直接短路
-  /// （面板已常驻一个播放器实例，再 push 全屏路由 = 两套实例各驱动歌词/进度
-  /// 动画，整页帧率翻倍）——这正是卡片深链在车机上"点了没反应"的根因：
-  /// 深链在车机屏走的是被吞的那条路。改为把命令转交给面板内 dockMode 实例
-  /// （它自己按实时 _tabLayout 解析歌词页下标），面板不可见时命令 no-op。
-  ///
-  /// MD3Music fork v28d：① context 换道——根 State 的 context 在 Navigator
-  /// 之上，openFullPlayer 里的 Navigator.of 会 FlutterError（Zone 吞掉表现
-  /// 为"点了没反应"），改用根导航器 key 的 context；② 车机判定改为
-  /// await 偏好就绪——冷启动 pending 消费赶在 prefs 回位前会把车机场景
-  /// 误分流到非车机分支。
+  /// MD3Music fork v29：车机点卡片＝**临时铺满全屏歌词**。真机复测明确：
+  /// 用户要"点卡片进去就是歌词全屏页面"，面板内切歌词 tab 只是半屏形态。
+  /// 做法：先临时抑制面板（卸载面板常驻播放器，守卫防的双实例双动画随之
+  /// 消失——同一时刻只有一个播放器实例驱动动画），再 force push 全屏路由；
+  /// 全屏页以 playerExpansion 从>0 落回 0 判定关闭（装填锁防启动期 0 值误放），
+  /// 关闭即释放面板抑制，常驻播放器自动挂回。抑制幂等（浅双击不叠加计数）。
+  bool _cardLyricsPanelSuppressed = false;
+  bool _cardLyricsArmed = false;
+  CarModeProvider? _cardLyricsCarMode;
+
   Future<void> _openFullPlayerOnLyrics() async {
     final carMode = context.read<CarModeProvider>();
     await carMode.ready;
     if (!mounted) return;
     if (carMode.active) {
+      _suppressPanelForCardLyrics(carMode);
+      final navContext = appNavigatorKey.currentContext;
+      if (navContext == null) {
+        // 根导航器尚未附着：本次直达取消，面板立即放回，不丢抑制计数。
+        _releasePanelForCardLyrics();
+        return;
+      }
+      playerTabIndex.value = 2;
+      // 已开着的全屏路由（此前经本入口铺满）→ 原地切歌词即可；
+      // 面板实例已在抑制中卸载，命令口的接管者只剩路由实例。
       sendDockPlayerLyricsCommand();
+      openFullPlayer(navContext, force: true);
       return;
     }
     final navContext = appNavigatorKey.currentContext;
@@ -413,6 +423,41 @@ class _AppViewState extends State<_AppView> {
     // 当场切歌词，再照常 push/popUntil，三种形态都落在歌词页。
     sendDockPlayerLyricsCommand();
     openFullPlayer(navContext);
+  }
+
+  /// 车机卡片深链的面板让位：抑制计数幂等（浅双击不叠加）；回退挂在
+  /// playerExpansion 的装填锁监听上——全屏歌词页自升过 >0 后落回 0，
+  /// 即视为关闭，面板自动放回。
+  void _suppressPanelForCardLyrics(CarModeProvider carMode) {
+    _cardLyricsCarMode ??= carMode;
+    if (_cardLyricsPanelSuppressed) return;
+    carMode.suppressPanel();
+    _cardLyricsPanelSuppressed = true;
+    _cardLyricsArmed = false;
+    playerExpansion.removeListener(_onCardLyricsExpansion);
+    playerExpansion.addListener(_onCardLyricsExpansion);
+  }
+
+  void _onCardLyricsExpansion() {
+    final v = playerExpansion.value;
+    if (!_cardLyricsArmed) {
+      // 装填：全屏歌词页真正展开过（>0）后才允许"落回 0"触发回退，
+      // 否则 push 当帧的 0 值会立刻误放抑制。
+      if (v > 0.0) _cardLyricsArmed = true;
+      return;
+    }
+    if (v <= 0.0) {
+      _releasePanelForCardLyrics();
+    }
+  }
+
+  void _releasePanelForCardLyrics() {
+    if (!_cardLyricsPanelSuppressed) return;
+    playerExpansion.removeListener(_onCardLyricsExpansion);
+    _cardLyricsCarMode?.releasePanel();
+    _cardLyricsCarMode = null;
+    _cardLyricsPanelSuppressed = false;
+    _cardLyricsArmed = false;
   }
 
   /// 根据 ShortcutConfigProvider 当前配置，整体替换 Android 桌面快捷方式列表。
@@ -651,6 +696,9 @@ class _AppViewState extends State<_AppView> {
 
   @override
   void dispose() {
+    // 卡片深链的面板让位兜底：根 State 销毁仍持抑制计数还欠着放回——
+    // release 成对止损（计数器随 Provider 生命周期存续，防泄漏）。
+    _releasePanelForCardLyrics();
     _shortcutConfig?.removeListener(_applyDesktopShortcuts);
     _playerProvider?.removeListener(_onPlayerChanged);
     _backgroundThemeProvider?.removeListener(_onBackgroundChanged);

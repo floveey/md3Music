@@ -181,6 +181,11 @@ bool get isFullPlayerOnTop => playerExpansion.value > 0.5;
 
 /// 打开 FullPlayer（**统一防重复入栈**，新代码一律走这里）。
 ///
+/// [force] 深链专用：车机卡片点击在有面板的车机模式下要走「先抑面板、
+/// 再铺满全屏歌词」的例外（app.dart 的深链分支），先保证调用方已抑制面板
+/// ——此时全屏路由在场，无双实例双动画问题，守卫放行是安全的。其余入口
+/// 不传 force，语义不变。
+///
 /// 此前各调用点各自判重且口径不一：多数用 `activePlayerRoute?.isCurrent == true`
 /// ——播放页已在栈中但**非栈顶**时（用户从播放页又打开了歌单/其他页面）
 /// `isCurrent=false`，仍会再 push 一个播放页；另有调用点完全不判重。结果是
@@ -195,12 +200,16 @@ bool get isFullPlayerOnTop => playerExpansion.value > 0.5;
 /// [scene] 是调用方（入口控件）在点击那一刻采集的形态快照，随路由透传 ——
 /// 悬浮胶囊这类"自己不写全局锚点"的入口必须带上它，否则展开起点只能落到
 /// 全局锚点或合成兜底上（见 [PlayerMorphScene] 与 [DraggablePlayerRoute.panelAnchorFor]）。
-void openFullPlayer(BuildContext context, {PlayerMorphScene? scene}) {
+void openFullPlayer(
+  BuildContext context, {
+  PlayerMorphScene? scene,
+  bool force = false,
+}) {
   // 车机模式：播放器已常驻在面板里，任何「打开全屏播放页」的入口都忽略。
   // 否则会在面板之外再 push 一个播放页 —— 两个实例各自驱动歌词/进度等动画，
   // 整页帧率翻倍。
-  // active 含自动检测：命中车机屏同样忽略。
-  if (context.read<CarModeProvider>().active) return;
+  // active 含自动检测：命中车机屏同样忽略。深链例外见 [force]。
+  if (!force && context.read<CarModeProvider>().active) return;
 
   // rootNavigator: true —— 桌面布局下内容区是嵌套 Navigator，若走最近的
   // Navigator 会把完整播放页 push 进中央内容区（只盖住内容区、盖不住侧栏与

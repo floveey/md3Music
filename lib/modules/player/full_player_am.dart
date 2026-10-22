@@ -429,8 +429,11 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
         // 「直达歌词」命令——全屏路由实例在场时深链走 openFullPlayer，本实例
         // 不注册；面板在场时全屏路由被 openFullPlayer 的守卫短路，命令由这里接。
         if (widget.dockMode) {
-          _dockLyricsCommandRef = _goDockLyrics;
           dockPlayerLyricsCommand = _goDockLyrics;
+          // 读回指针本身作判属存根：Dart 不保证两次求值同一方法撕取是
+          // 同一实例，直接存 `_goDockLyrics` 会让 dispose 的 identical 判
+          // 空失准；这里绑定的是「当时指针的真实值」，判属永远精确。
+          _dockLyricsCommandRef = dockPlayerLyricsCommand;
         }
         if (Platform.isWindows) {
       SettingsRepository.windowsLiveSettingsRevision.addListener(

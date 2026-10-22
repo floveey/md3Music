@@ -151,6 +151,26 @@ double playerMiniBarHeight() {
 /// 让覆盖层从这个信号取初始下标，两个问题一起消掉。
 final ValueNotifier<int> playerTabIndex = ValueNotifier<int>(1);
 
+/// dockMode（车机面板常驻播放器）实例的**歌词指挥口**，卡片深链专用。
+///
+/// `openFullPlayer` 对车机模式直接短路（面板已常驻一个播放器实例，再 push
+/// 一个全屏路由会两套各驱动歌词/进度动画、整页帧率翻倍），所以车机模式下
+/// 「车机点媒体卡片直达歌词页」不能走 push，只能把命令转交给面板内那个
+/// dockMode 实例自身切换到 `_tabLayout.lyricsIndex`。
+///
+/// 抽象成 `void Function()`（而不是下标）：面板走的是删掉封面 tab 的窄屏
+/// 结构（见 car_mode_panel 282-285 注释），歌词页下标取决于实时的
+/// `_tabLayout`，由实例自己解析，调用方只表达"切歌词"这个语义。
+///
+/// 注册即接管：dockMode 实例 initState 注册、dispose 注销（用引用所属判定，
+/// 防拆掉后来者）。没有在场实例（车机模式关/面板被抑制页收起）时发送是
+/// **no-op**——不会凭空拉起任何页面，等下一次卡片点击再试。
+typedef void PlayerLyricsCommandHandler();
+
+PlayerLyricsCommandHandler? dockPlayerLyricsCommand;
+
+void sendDockPlayerLyricsCommand() => dockPlayerLyricsCommand?.call();
+
 /// 兼容旧引用：返回 true 表示当前 FullPlayer 在栈顶。
 /// 新代码应直接监听 [playerExpansion]。
 bool get isFullPlayerOnTop => playerExpansion.value > 0.5;

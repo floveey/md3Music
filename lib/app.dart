@@ -382,7 +382,17 @@ class _AppViewState extends State<_AppView> {
   /// MD3Music fork v21 车机卡片：直达全屏歌词页。预置「歌词页」为初始 tab——
   /// 窄屏页身份的歌词下标是 2，宽屏由 _syncTabLayout 按页身份自动换算，不用管
   /// 横竖屏差异；歌的播放状态保持不变（只是看词，不会顺手开始播放）。
+  ///
+  /// MD3Music fork v28：车机模式分流。`openFullPlayer` 对车机模式直接短路
+  /// （面板已常驻一个播放器实例，再 push 全屏路由 = 两套实例各驱动歌词/进度
+  /// 动画，整页帧率翻倍）——这正是卡片深链在车机上"点了没反应"的根因：
+  /// 深链在车机屏走的是被吞的那条路。改为把命令转交给面板内 dockMode 实例
+  /// （它自己按实时 _tabLayout 解析歌词页下标），面板不可见时命令 no-op。
   void _openFullPlayerOnLyrics() {
+    if (context.read<CarModeProvider>().active) {
+      sendDockPlayerLyricsCommand();
+      return;
+    }
     playerTabIndex.value = 2;
     openFullPlayer(context);
   }

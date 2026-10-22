@@ -711,6 +711,13 @@ class _FullPlayerState extends State<FullPlayer>
     // 覆盖层与接管的页面路由可能短暂并存，服务侧用计数消化，勿改回布尔）。
     MusicHapticsService.instance.setPlayerPageActive(true);
     WidgetsBinding.instance.addObserver(this);
+    // MD3Music fork v28：dockMode（车机面板常驻播放器）实例接管卡片深链的
+    // 「直达歌词」命令——全屏路由实例在场时深链走 openFullPlayer，本实例
+    // 不注册；面板在场时全屏路由被 openFullPlayer 的守卫短路，命令由这里接。
+    if (widget.dockMode) {
+      _dockLyricsCommandRef = _goDockLyrics;
+      dockPlayerLyricsCommand = _goDockLyrics;
+    }
     if (Platform.isWindows) {
       SettingsRepository.windowsLiveSettingsRevision.addListener(
         _reloadWindowsPlayerSettings,
@@ -1173,6 +1180,13 @@ class _FullPlayerState extends State<FullPlayer>
 
   @override
   void dispose() {
+    // 与 initState 的 dockMode 注册成对：确认指针还属于本实例才清空，
+    // 防止 dockMode 实例 dispose 时拆掉后来者注册的命令口。
+    if (_dockLyricsCommandRef != null &&
+        identical(dockPlayerLyricsCommand, _dockLyricsCommandRef)) {
+      dockPlayerLyricsCommand = null;
+    }
+    _dockLyricsCommandRef = null;
     if (Platform.isWindows) {
       SettingsRepository.windowsLiveSettingsRevision.removeListener(
         _reloadWindowsPlayerSettings,
@@ -3809,6 +3823,18 @@ class _FullPlayerState extends State<FullPlayer>
   }
 
   /// 程序化切页（封面页点击、歌词页点击等）。
+  /// initState 里登记的歌词命令口引用（dispose 时与全局指针比对防拆错）。
+  PlayerLyricsCommandHandler? _dockLyricsCommandRef;
+
+  /// 卡片深链在车机模式下的落点：指挥本面板实例切到歌词页。统一 postFrame：
+  /// 命令可能在面板实例 initState 后、pager 未就绪的当帧到达，此时 goToPage
+  /// 是 no-op，落一帧等它就位再切。
+  void _goDockLyrics() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _goToTab(_tabLayout.lyricsIndex);
+    });
+  }
+
   void _goToTab(int index) => _pagerKey.currentState?.goToPage(index);
 
   // MD3E v2: 音量调节改为右上角长按音质徽章呼出。

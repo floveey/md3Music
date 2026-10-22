@@ -55,6 +55,11 @@ class MD3MusicMediaSessionService : MediaSessionService() {
     }
 
     override fun onGetSession(info: MediaSession.ControllerInfo): MediaSession? {
+        // MD3Music fork v28 诊断：记录连接方包名。连车判据现状只靠"投屏虚拟屏"
+        // 与 action 排除，拿不到调用方身份；真机采集到车机端/系统框架各自的
+        // 包名后，可把唤醒判据收紧成车机端包名白名单（bind 早于投屏的时序
+        // 风险也随之消除）。每连接方一行，量级可忽略。
+        Log.i("CarAutoResume", "onGetSession controller=${info.remoteUserInfo.packageName}")
         // 返回 fork 当前活跃的媒体3会话；未初始化时拒绝连接
         return AudioPlayer.getActiveMediaSession()
     }

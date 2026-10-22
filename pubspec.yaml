@@ -94,6 +94,13 @@ dependency_overrides:
   # Equalizer/Viper 各自吞掉错误后，LyricPreferences 等无保护的 load() 让
   # runBootstrap 在 runApp 之前死掉（splash 后永久黑屏）。钉回验证可用的
   # 2.4.28（10-16 构建解析到的版本），等同临时补上 lock 的功能。
+  material_ui: 1.7.0
+  # 2026-10-22 新雷（同类根因）：material_ui 1.8.0（2026-10-20 15:49 UTC 发布，
+  # 晚于上一轮绿色构建）barrel 冲出 RoundedPolygon/CornerRounding，与
+  # m3e_core 1.1.4 自带 shapes 同名冲突——m3e_core 包内部源码与
+  # sleep_timer_polygon.dart 均同时 import 两家，kernel_snapshot 阶段
+  # "'RoundedPolygon' is imported from both" 编译失败。钉回上一轮绿色
+  # 构建（b46fcc2）解析到的 1.7.0，即最后一个与 m3e_core 共存的版本。
 
 flutter:
   uses-material-design: true

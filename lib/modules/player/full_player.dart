@@ -3815,9 +3815,6 @@ class _FullPlayerState extends State<FullPlayer>
     _pagerKey.currentState?.settleNearest();
   }
 
-  /// 程序化切页（封面页点击、歌词页点击等）。
-  void _goToTab(int index) => _pagerKey.currentState?.goToPage(index);
-
   /// 卡片深链在车机模式下的落点：指挥本面板实例切到歌词页。统一 postFrame：
   /// 命令可能在面板实例 initState 后、pager 未就绪的当帧到达，此时 goToPage
   /// 是 no-op，落一帧等它就位再切。
@@ -3827,6 +3824,7 @@ class _FullPlayerState extends State<FullPlayer>
     });
   }
 
+  /// 程序化切页（封面页点击、歌词页点击等）。
   void _goToTab(int index) => _pagerKey.currentState?.goToPage(index);
 
   // MD3E v2: 音量调节改为右上角长按音质徽章呼出。

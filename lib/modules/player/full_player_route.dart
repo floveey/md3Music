@@ -151,15 +151,20 @@ double playerMiniBarHeight() {
 /// 让覆盖层从这个信号取初始下标，两个问题一起消掉。
 final ValueNotifier<int> playerTabIndex = ValueNotifier<int>(1);
 
-/// 播放页在场的**歌词指挥口**，卡片深链专用（v28e 起所有播放页实例都接管）。
+/// 播放页在场的**歌词指挥口**，卡片深链专用（v31 起以集合承载全部在场实例）。
 ///
 /// 车机模式下 `openFullPlayer` 直接短路（面板已常驻一个 dockMode 实例，
 /// 再 push 全屏路由会两套各驱动歌词/进度动画、帧率翻倍），「车机点媒体卡片
 /// 直达歌词页」不能走 push，只能把命令交给在场实例切歌词。v28e 实测后把
 /// 全屏路由实例（含拖拽覆盖层）也纳入接管：全屏路由已开着时点卡片，
 /// openFullPlayer 对存量路由只会"带回栈顶"而不切 tab——由在场实例当场
-/// 消费命令补上这一刀。多实例并存时各自切页（幂等 UI 更新，不创建新实例）；
-/// 后注册者覆盖指针（最新在场的活跃实例），dispose 判属注销。
+/// 消费命令补上这一刀。
+///
+/// v31：单指针改**注册集合**。覆盖层这类"后注册"的实例若在覆盖后注销，
+/// 单指针会以 identical 判属把整根清空，而它先注册的"存活"路由/面板实例
+/// 的命令从此静默 no-op（深链又对存量路由不 push——症状借拖拽路径复活）。
+/// 集合模式实例死亡只摘自己的注册，存活者继续响应；发送对全部在场实例
+/// 广播，各自幂等切页（UI 更新，不创建新实例）。
 ///
 /// 抽象成 `void Function()`（而不是下标）：播放页窄屏结构的实际顺序是
 /// [playlist, cover, lyrics, …]（下标 2 恰为歌词），但顺序随宽窄屏与
@@ -171,9 +176,21 @@ final ValueNotifier<int> playerTabIndex = ValueNotifier<int>(1);
 /// 页面，等下一次卡片点击再试。
 typedef void PlayerLyricsCommandHandler();
 
-PlayerLyricsCommandHandler? dockPlayerLyricsCommand;
+final Set<PlayerLyricsCommandHandler> _lyricsCommandHandlers =
+    <PlayerLyricsCommandHandler>{};
 
-void sendDockPlayerLyricsCommand() => dockPlayerLyricsCommand?.call();
+void registerPlayerLyricsCommand(PlayerLyricsCommandHandler handler) =>
+    _lyricsCommandHandlers.add(handler);
+
+void unregisterPlayerLyricsCommand(PlayerLyricsCommandHandler handler) =>
+    _lyricsCommandHandlers.remove(handler);
+
+void sendDockPlayerLyricsCommand() {
+  for (final handler
+      in List<PlayerLyricsCommandHandler>.of(_lyricsCommandHandlers)) {
+    handler();
+  }
+}
 
 /// 兼容旧引用：返回 true 表示当前 FullPlayer 在栈顶。
 /// 新代码应直接监听 [playerExpansion]。

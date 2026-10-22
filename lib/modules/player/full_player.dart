@@ -711,16 +711,10 @@ class _FullPlayerState extends State<FullPlayer>
     // 覆盖层与接管的页面路由可能短暂并存，服务侧用计数消化，勿改回布尔）。
     MusicHapticsService.instance.setPlayerPageActive(true);
     WidgetsBinding.instance.addObserver(this);
-    // MD3Music fork v28e：**所有**播放页实例都接管歌词命令口（不再限
-    // dockMode）——真机实测：全屏路由已开着时点车机卡片，openFullPlayer
-    // 对存量路由"什么都不做"，playerTabIndex 预置只对新实例生效，表现
-    // 为"进去了但停的不是歌词页"。让在场实例自己消费命令当场切歌词页；
-    // 后注册者覆盖指针（永远是最新在场的活跃实例），dispose 判属注销。
-    dockPlayerLyricsCommand = _goDockLyrics;
-    // 读回指针本身作判属存根：Dart 不保证两次求值同一方法撕取是
-    // 同一实例，直接存 `_goDockLyrics` 会让 dispose 的 identical 判
-    // 空失准；这里绑定的是「当时指针的真实值」，判属永远精确。
-    _dockLyricsCommandRef = dockPlayerLyricsCommand;
+    // MD3Music fork v31：歌词命令口改注册集合（先注册的存活实例不再被
+    // 后注册实例的注销挤掉，重放"进了但停的不是歌词页"即不会在拖拽
+    // 路径复活）。
+    registerPlayerLyricsCommand(_goDockLyrics);
     if (Platform.isWindows) {
       SettingsRepository.windowsLiveSettingsRevision.addListener(
         _reloadWindowsPlayerSettings,
@@ -1183,13 +1177,9 @@ class _FullPlayerState extends State<FullPlayer>
 
   @override
   void dispose() {
-    // 与 initState 的 dockMode 注册成对：确认指针还属于本实例才清空，
-    // 防止 dockMode 实例 dispose 时拆掉后来者注册的命令口。
-    if (_dockLyricsCommandRef != null &&
-        identical(dockPlayerLyricsCommand, _dockLyricsCommandRef)) {
-      dockPlayerLyricsCommand = null;
-    }
-    _dockLyricsCommandRef = null;
+    // 与 initState 的命令口注册成对：只摘除自己的撕取（集合 remove），
+    // 存活实例（路由/面板）不受影响。
+    unregisterPlayerLyricsCommand(_goDockLyrics);
     if (Platform.isWindows) {
       SettingsRepository.windowsLiveSettingsRevision.removeListener(
         _reloadWindowsPlayerSettings,
@@ -3826,8 +3816,7 @@ class _FullPlayerState extends State<FullPlayer>
   }
 
   /// 程序化切页（封面页点击、歌词页点击等）。
-  /// initState 里登记的歌词命令口引用（dispose 时与全局指针比对防拆错）。
-  PlayerLyricsCommandHandler? _dockLyricsCommandRef;
+  void _goToTab(int index) => _pagerKey.currentState?.goToPage(index);
 
   /// 卡片深链在车机模式下的落点：指挥本面板实例切到歌词页。统一 postFrame：
   /// 命令可能在面板实例 initState 后、pager 未就绪的当帧到达，此时 goToPage

@@ -145,6 +145,11 @@ class MD3MusicMediaSessionService : MediaSessionService() {
      * 才有内容）。
      */
     private fun maybeWakeForCarConnect(action: String?) {
+        // MD3Music fork v31：同进程自绑定不算连车——AudioPlaybackService 在
+        // onCreate 会以标准 MediaSessionService action 自绑本服务（媒体3通知
+        // 承载装配），本机投屏（投电视/平板）虚拟屏常驻的设备上，这次自绑定
+        // 会被"虚拟屏 exists"门误判成真连车，无车也自动拉起续播。
+        if (android.os.Binder.getCallingUid() == android.os.Process.myUid()) return
         if (action == "com.vivo.musicwidgetmix.support.service") return
         if (!autoWakeEnabled) return
         // MD3Music fork v26：标准 MediaSessionService 绑定在手机本地也会发生
@@ -156,7 +161,7 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         if (dm == null || dm.displays.none { it.displayId != Display.DEFAULT_DISPLAY }) {
             Log.i(
                 "CarAutoResume",
-                "external bind action=$action skipped: no projected display (local system bind)"
+                "external bind action=$action skipped: no projected display yet"
             )
             return
         }

@@ -144,7 +144,8 @@ class MediaNotificationService {
           // 否则车机冷启动的点击会被静默丢弃（v29 的"投递即清"过激）。
           if (onOpenCardLyric != null) {
             onOpenCardLyric!();
-            unawaited(_channel.invokeMethod('consumePendingOpenCardLyric'));
+            unawaited(_channel.invokeMethod('consumePendingOpenCardLyric')
+                .catchError((Object _) {}));
           }
           break;
         case 'toggleDesktopLyric':

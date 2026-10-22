@@ -3919,7 +3919,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // 缓存未命中且未登录时才提示登录（先等凭证加载完成，避免启动期误判）
     if (cachedPath == null && !await KugouApiClient().isLoggedInWhenReady()) {
-      onLoginRequired?.call();
+      // v31：等待期被顶替则静默作罢——登录提示只属于仍在途的请求，防误弹。
+      if (_isPlaybackRequestCurrent(playbackRequest)) {
+        onLoginRequired?.call();
+      }
       return;
     }
     // v28d：await 期间被顶替则作罢——_loadPlaylist 会全表替换并落盘，
@@ -4130,7 +4133,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 就绪后才发出新代次，反而作废用户在等待期里的更新起播，旧云盘列表赢。
     final playbackRequest = _issuePlaybackRequest();
     if (!await KugouApiClient().isLoggedInWhenReady()) {
-      onLoginRequired?.call();
+      // v31：等待期被顶替则静默作罢，防误弹（同 playOnlinePlaylist 口径）。
+      if (_isPlaybackRequestCurrent(playbackRequest)) {
+        onLoginRequired?.call();
+      }
       return;
     }
     // 等待期被顶替则作罢，不入队不落盘。
@@ -4937,7 +4943,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // 静默路径：启动早期登录 token 可能尚未从存储加载完成、本地服务器
           // 也未必就绪，此刻误判未登录会误弹「请先登录」。改为静默跳过，
           // 待用户点击播放时用已就绪的状态重新校验（届时仍会正确判断）。
-          if (play) {
+          // v31：登录提示只属于仍在途的请求——等待期被顶替则静默作罢；
+          // play=false 路径与代次由上层复审，不需要任何提示。
+          if (play && _isPlaybackRequestCurrent(request)) {
             onLoginRequired?.call();
           }
           return false;

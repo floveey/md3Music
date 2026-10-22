@@ -1475,10 +1475,12 @@ class AudioPlaybackService : Service() {
     }
 
     /// 前台服务占位通知：唤醒场景下服务可能刚被 startForegroundService 拉起，
-    /// 需要尽快进入前台。真实内容随后由 Dart 端 updateNotification 覆盖。
+    /// 需要尽快进入前台。媒体3会话通知接管内容渲染（MD3MusicMediaSessionService
+    /// 的 provider 链），本占位只负责在 5s 死线内完成 startForeground 登记并
+    /// 在被系统拒绝时自停（startForegroundDetached 的 catch 崩溃防护依赖
+    /// foregroundStarted 只在成功后置位）。
     private fun ensureForeground() {
         if (foregroundStarted) return
-        foregroundStarted = true
         try {
             val builder = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher_monochrome)

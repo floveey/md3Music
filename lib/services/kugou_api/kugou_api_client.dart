@@ -806,6 +806,15 @@ class KugouApiClient {
   String? get vipToken => _vipToken;
   String? get dfid => _dfid;
   bool get isLoggedIn => _token != null && _userid != null;
+
+  /// 登录态就绪快照：`_initFromStorage` 在构造函数里异步启动（Keystore/prefs
+  /// 读取有延迟），启动恢复/连车唤醒等链路在凭证载入前同步读 [isLoggedIn]
+  /// 会误判"未登录"。需要据登录态分流的调用一律先 await 本方法。
+  Future<bool> isLoggedInWhenReady() async {
+    await _ensureInitialized();
+    return isLoggedIn;
+  }
+
   bool get hasVipToken => _vipToken != null && _vipToken!.isNotEmpty;
 
   Future<void> registerDevice() async {

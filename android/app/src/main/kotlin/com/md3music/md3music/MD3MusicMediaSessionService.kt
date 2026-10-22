@@ -3,9 +3,11 @@ package com.md3music.md3music
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
+import android.view.Display
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -140,6 +142,19 @@ class MD3MusicMediaSessionService : MediaSessionService() {
     private fun maybeWakeForCarConnect(action: String?) {
         if (action == "com.vivo.musicwidgetmix.support.service") return
         if (!autoWakeEnabled) return
+        // MD3Music fork v26：标准 MediaSessionService 绑定在手机本地也会发生
+        // （系统媒体框架每次进程冷启动都会常规 bind 一次），单靠排除 vivo action
+        // 会把普通打开 App 误判成连车——自动拉起恢复后撞上凭证加载窗口，误弹
+        // 「请先登录」。改与卡片深链同一判据：存在投屏虚拟屏才算真连车。车机
+        // 端绑定若早于投屏建立会错过首次，由车机重连再触发；留下跳过原因便于核对。
+        val dm = getSystemService(DisplayManager::class.java)
+        if (dm == null || dm.displays.none { it.displayId != Display.DEFAULT_DISPLAY }) {
+            Log.i(
+                "CarAutoResume",
+                "external bind action=$action skipped: no projected display (local system bind)"
+            )
+            return
+        }
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastCarWakeAt < 15_000L) return
         if (AudioPlayer.getActiveMediaSession() != null) return

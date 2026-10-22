@@ -3636,7 +3636,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     final request = playbackRequest ?? _issuePlaybackRequest();
     final apiClient = KugouApiClient();
-    if (!apiClient.isLoggedIn) {
+    // 先等凭证加载完成再判定登录态，避免启动窗口期误弹登录提示
+    if (!await apiClient.isLoggedInWhenReady()) {
       onLoginRequired?.call();
       return;
     }
@@ -3912,8 +3913,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (!_isPlaybackRequestCurrent(playbackRequest)) return;
     }
 
-    // 缓存未命中且未登录时才提示登录
-    if (cachedPath == null && !KugouApiClient().isLoggedIn) {
+    // 缓存未命中且未登录时才提示登录（先等凭证加载完成，避免启动期误判）
+    if (cachedPath == null && !await KugouApiClient().isLoggedInWhenReady()) {
       onLoginRequired?.call();
       return;
     }
@@ -4118,7 +4119,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 一起听听众：云盘列表同样是「列表点击」入口
     final guestGate = _roomGuestPlayGate(songs[startIndex]);
     if (guestGate != null && !await guestGate) return;
-    if (!KugouApiClient().isLoggedIn) {
+    if (!await KugouApiClient().isLoggedInWhenReady()) {
       onLoginRequired?.call();
       return;
     }
@@ -4920,7 +4921,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           prefetchedQuality != _audioQuality.value;
       if (song.url == null || cachedUrlStale) {
         // URL 不存在，需要解析
-        if (!KugouApiClient().isLoggedIn) {
+        if (!await KugouApiClient().isLoggedInWhenReady()) {
           // 仅用户主动播放（play=true）才提示登录。play=false 是启动恢复等
           // 静默路径：启动早期登录 token 可能尚未从存储加载完成、本地服务器
           // 也未必就绪，此刻误判未登录会误弹「请先登录」。改为静默跳过，

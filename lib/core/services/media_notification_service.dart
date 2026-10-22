@@ -139,11 +139,13 @@ class MediaNotificationService {
           if (mode != null) onSetLoopMode?.call(mode);
           break;
         case 'openCardLyricView':
-          onOpenCardLyric?.call();
-          // MD3Music fork v28d：投递即清零冷启动 pending——不等下一次冷启动
-          // 的消费点（那时会凭旧值凭空直达一次歌词页）。consume 只清位不触发
-          // 导航，不会引发重放。
-          unawaited(_channel.invokeMethod('consumePendingOpenCardLyric'));
+          // MD3Music fork v30：回调未装配（首帧前送达）时不清 pending——
+          // 由 _AppView postFrame 的消费兜底接住；装配后才投递并清零。
+          // 否则车机冷启动的点击会被静默丢弃（v29 的"投递即清"过激）。
+          if (onOpenCardLyric != null) {
+            onOpenCardLyric!();
+            unawaited(_channel.invokeMethod('consumePendingOpenCardLyric'));
+          }
           break;
         case 'toggleDesktopLyric':
           onToggleDesktopLyric?.call();

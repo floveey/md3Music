@@ -383,14 +383,14 @@ class _AppViewState extends State<_AppView> {
   /// 窄屏页身份的歌词下标是 2，宽屏由 _syncTabLayout 按页身份自动换算，不用管
   /// 横竖屏差异；歌的播放状态保持不变（只是看词，不会顺手开始播放）。
   ///
-  /// MD3Music fork v29：车机点卡片＝**临时铺满全屏歌词**。真机复测明确：
+  /// MD3Music fork v29/v30：车机点卡片＝**临时铺满全屏歌词**。真机复测明确：
   /// 用户要"点卡片进去就是歌词全屏页面"，面板内切歌词 tab 只是半屏形态。
   /// 做法：先临时抑制面板（卸载面板常驻播放器，守卫防的双实例双动画随之
-  /// 消失——同一时刻只有一个播放器实例驱动动画），再 force push 全屏路由；
-  /// 全屏页以 playerExpansion 从>0 落回 0 判定关闭（装填锁防启动期 0 值误放），
-  /// 关闭即释放面板抑制，常驻播放器自动挂回。抑制幂等（浅双击不叠加计数）。
+  /// 消失——同一时刻只有一个播放器实例驱动动画），再 force push 全屏路由。
+  /// 回退不依赖逐帧动画值（系统减弱动画是单帧硬写、秒关可能全程 0），
+  /// 用逐帧看门狗统一放回条件：**无全屏路由在场且 expansion 归零**即
+  /// 释放面板抑制（打开失败/秒关/减弱动画收起一网打尽），面板自动挂回。
   bool _cardLyricsPanelSuppressed = false;
-  bool _cardLyricsArmed = false;
   CarModeProvider? _cardLyricsCarMode;
 
   Future<void> _openFullPlayerOnLyrics() async {
@@ -425,39 +425,39 @@ class _AppViewState extends State<_AppView> {
     openFullPlayer(navContext);
   }
 
-  /// 车机卡片深链的面板让位：抑制计数幂等（浅双击不叠加）；回退挂在
-  /// playerExpansion 的装填锁监听上——全屏歌词页自升过 >0 后落回 0，
-  /// 即视为关闭，面板自动放回。
+  /// 车机卡片深链的面板让位：抑制计数幂等（双击不叠加）；回退靠看门狗。
   void _suppressPanelForCardLyrics(CarModeProvider carMode) {
     _cardLyricsCarMode ??= carMode;
     if (_cardLyricsPanelSuppressed) return;
     carMode.suppressPanel();
     _cardLyricsPanelSuppressed = true;
-    _cardLyricsArmed = false;
-    playerExpansion.removeListener(_onCardLyricsExpansion);
-    playerExpansion.addListener(_onCardLyricsExpansion);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _watchPanelReturn());
   }
 
-  void _onCardLyricsExpansion() {
-    final v = playerExpansion.value;
-    if (!_cardLyricsArmed) {
-      // 装填：全屏歌词页真正展开过（>0）后才允许"落回 0"触发回退，
-      // 否则 push 当帧的 0 值会立刻误放抑制。
-      if (v > 0.0) _cardLyricsArmed = true;
+  /// 看门狗：每帧复查。路由销毁会把 [activePlayerRoute] 置空并把
+  /// [playerExpansion] 归零（full_player_route dispose 499-512），两个条件
+  /// 同时满足即"全屏歌词页已经关了"（或压根没开成）→ 释放面板抑制。
+  /// 系统减弱动画（收起 1.0→0 单帧硬写、甚至无写入）、点开 50ms 内被返回
+  /// 等边缘都会在这里落回，而不是依赖装填锁膨胀值。
+  void _watchPanelReturn() {
+    if (!_cardLyricsPanelSuppressed) return;
+    final routeClosed = activePlayerRoute == null && playerExpansion.value <= 0.0;
+    if (routeClosed) {
+      _releasePanelForCardLyrics();
       return;
     }
-    if (v <= 0.0) {
+    if (!mounted) {
       _releasePanelForCardLyrics();
+      return;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _watchPanelReturn());
   }
 
   void _releasePanelForCardLyrics() {
     if (!_cardLyricsPanelSuppressed) return;
-    playerExpansion.removeListener(_onCardLyricsExpansion);
     _cardLyricsCarMode?.releasePanel();
     _cardLyricsCarMode = null;
     _cardLyricsPanelSuppressed = false;
-    _cardLyricsArmed = false;
   }
 
   /// 根据 ShortcutConfigProvider 当前配置，整体替换 Android 桌面快捷方式列表。

@@ -3638,9 +3638,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final apiClient = KugouApiClient();
     // 先等凭证加载完成再判定登录态，避免启动窗口期误弹登录提示
     if (!await apiClient.isLoggedInWhenReady()) {
+      // v28d：await 期间的顶替再起播会让本续延失效，直接 write 旧歌会覆盖
+      // 持久化 playlist（_savePlaylistIfChanged 冷启动恢复错歌）——比对代次。
+      if (!_isPlaybackRequestCurrent(request)) return;
       onLoginRequired?.call();
       return;
     }
+    if (!_isPlaybackRequestCurrent(request)) return;
     // 一起听房主：房间歌单外的曲目交由守卫拦截（本地队列播放不走此入口）
     if (onRoomOwnerInterceptPlayback?.call(song) ?? false) return;
     _resetAbnormalRetry();
@@ -3918,6 +3922,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       onLoginRequired?.call();
       return;
     }
+    // v28d：await 期间被顶替则作罢——_loadPlaylist 会全表替换并落盘，
+    // 旧列表续延跑赢就是持久化污染。
+    if (!_isPlaybackRequestCurrent(playbackRequest)) return;
 
     _loadPlaylist(songs, startIndex);
     _currentSong = _playlist[_currentIndex];
@@ -4119,11 +4126,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 一起听听众：云盘列表同样是「列表点击」入口
     final guestGate = _roomGuestPlayGate(songs[startIndex]);
     if (guestGate != null && !await guestGate) return;
+    // v28d：先领代次再 await 登录态——旧"先 await 后领"会让本续延在凭证
+    // 就绪后才发出新代次，反而作废用户在等待期里的更新起播，旧云盘列表赢。
+    final playbackRequest = _issuePlaybackRequest();
     if (!await KugouApiClient().isLoggedInWhenReady()) {
       onLoginRequired?.call();
       return;
     }
-    final playbackRequest = _issuePlaybackRequest();
+    // 等待期被顶替则作罢，不入队不落盘。
+    if (!_isPlaybackRequestCurrent(playbackRequest)) return;
 
     _loadPlaylist(songs, startIndex);
     _currentSong = _playlist[_currentIndex];

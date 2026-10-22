@@ -553,6 +553,18 @@ class MainActivity : FlutterActivity() {
                         // 挂起结果：等服务 onCreate 真正完成 addView（或权限竞态失败
                         // stopSelf）后由 completeFloatingStart 回填真实结果，不再提前
                         // 返回 success，杜绝"开关已开但悬浮窗未出现"的假开启。
+                        // MD3Music fork v28d：5s 窗口内重复调用先结算上一个挂起
+                        // Result（按当前状态）并撤旧超时——否则旧 Result 悬挂泄漏
+                        // （Dart Future 永久挂起），旧 timeout 到点还会抢用新
+                        // Result 提前按旧状态回填。
+                        pendingFloatingTimeout?.let { floatingHandler.removeCallbacks(it) }
+                        pendingFloatingTimeout = null
+                        pendingFloatingStart?.let { previous ->
+                            pendingFloatingStart = null
+                            previous.success(
+                                FloatingLyricService.isRunning && FloatingLyricService.viewAdded
+                            )
+                        }
                         pendingFloatingStart = result
                         val timeout = Runnable { completeFloatingStart(FloatingLyricService.viewAdded) }
                         pendingFloatingTimeout = timeout

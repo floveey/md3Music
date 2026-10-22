@@ -158,9 +158,11 @@ final ValueNotifier<int> playerTabIndex = ValueNotifier<int>(1);
 /// 「车机点媒体卡片直达歌词页」不能走 push，只能把命令转交给面板内那个
 /// dockMode 实例自身切换到 `_tabLayout.lyricsIndex`。
 ///
-/// 抽象成 `void Function()`（而不是下标）：面板走的是删掉封面 tab 的窄屏
-/// 结构（见 car_mode_panel 282-285 注释），歌词页下标取决于实时的
-/// `_tabLayout`，由实例自己解析，调用方只表达"切歌词"这个语义。
+/// 抽象成 `void Function()`（而不是下标）：播放页窄屏结构的实际顺序是
+/// [playlist, cover, lyrics, …]（下标 2 恰为歌词），但顺序随宽窄屏与
+/// tab 开关动态调整——歌词页下标由在场实例按实时 `_tabLayout` 解析
+/// （`lyricsIndex`，见 player_tab_layout），调用方只表达"切歌词"语义，
+/// 不写死任何下标。
 ///
 /// 注册即接管：dockMode 实例 initState 注册、dispose 注销（用引用所属判定，
 /// 防拆掉后来者）。没有在场实例（车机模式关/面板被抑制页收起）时发送是

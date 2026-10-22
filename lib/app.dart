@@ -388,13 +388,27 @@ class _AppViewState extends State<_AppView> {
   /// 动画，整页帧率翻倍）——这正是卡片深链在车机上"点了没反应"的根因：
   /// 深链在车机屏走的是被吞的那条路。改为把命令转交给面板内 dockMode 实例
   /// （它自己按实时 _tabLayout 解析歌词页下标），面板不可见时命令 no-op。
-  void _openFullPlayerOnLyrics() {
-    if (context.read<CarModeProvider>().active) {
+  ///
+  /// MD3Music fork v28d：① context 换道——根 State 的 context 在 Navigator
+  /// 之上，openFullPlayer 里的 Navigator.of 会 FlutterError（Zone 吞掉表现
+  /// 为"点了没反应"），改用根导航器 key 的 context；② 车机判定改为
+  /// await 偏好就绪——冷启动 pending 消费赶在 prefs 回位前会把车机场景
+  /// 误分流到非车机分支。
+  Future<void> _openFullPlayerOnLyrics() async {
+    final carMode = context.read<CarModeProvider>();
+    await carMode.ready;
+    if (!mounted) return;
+    if (carMode.active) {
       sendDockPlayerLyricsCommand();
       return;
     }
+    final navContext = appNavigatorKey.currentContext;
+    if (navContext == null) {
+      // 根导航器尚未附着（极冷启动）：本次直达取消，避免打开无效路径。
+      return;
+    }
     playerTabIndex.value = 2;
-    openFullPlayer(context);
+    openFullPlayer(navContext);
   }
 
   /// 根据 ShortcutConfigProvider 当前配置，整体替换 Android 桌面快捷方式列表。

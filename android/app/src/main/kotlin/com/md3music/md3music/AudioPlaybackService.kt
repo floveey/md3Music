@@ -1541,6 +1541,15 @@ class AudioPlaybackService : Service() {
             try {
                 val engine = obtainFlutterEngine()
                 if (engine != null) {
+                    // MD3Music fork v28d：复用路径补会话口径——headless 时代若曾按
+                    // 「非车唤醒」把会话创建禁掉，之后车机 bind 复用旧引擎派发 play
+                    // 会因会话未启用而拿不到卡片；只在车机唤醒来源放开（只升不降，
+                    // 非 car 派发保持既有口径不动）。
+                    if (wakeFromCarBind) {
+                        try {
+                            com.ryanheise.just_audio.AudioPlayer.setMediaSessionEnabled(true)
+                        } catch (_: Throwable) {}
+                    }
                     dispatchToDartWithRetry(engine)
                 } else {
                     createHeadlessEngineAndDispatch()

@@ -158,8 +158,18 @@ class CarModeProvider extends ChangeNotifier {
       _notifySafely();
     } catch (_) {
       // 读取失败保持默认（关闭），不影响启动。
+    } finally {
+      if (!_loadGate.isCompleted) _loadGate.complete();
     }
   }
+
+  /// 偏好加载就绪门：`_load()` 完成（成功或失败）后落位。启动早期的状态判定
+  /// （车机卡片深链分流等）应 `await ready` 再读 [active]，否则 prefs 未回位
+  /// 时 `_enabled`/`_autoScreenEnabled` 都是构造默认 false，会把车机场景
+  /// 误分流到非车机分支。
+  final Completer<void> _loadGate = Completer<void>();
+
+  Future<void> get ready => _loadGate.future;
 
   /// UI 层在 build 阶段按 MediaQuery 尺寸计算并注入两个屏幕判定：
   /// 是否车机屏（[isCarLikeScreen]）、是否竖屏/近方屏（[isPortraitOrSquareScreen]）。

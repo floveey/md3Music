@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 /// 为原生重试提供有界的命令去重，并且只确认实际交给回调的命令。
@@ -138,6 +140,10 @@ class MediaNotificationService {
           break;
         case 'openCardLyricView':
           onOpenCardLyric?.call();
+          // MD3Music fork v28d：投递即清零冷启动 pending——不等下一次冷启动
+          // 的消费点（那时会凭旧值凭空直达一次歌词页）。consume 只清位不触发
+          // 导航，不会引发重放。
+          unawaited(_channel.invokeMethod('consumePendingOpenCardLyric'));
           break;
         case 'toggleDesktopLyric':
           onToggleDesktopLyric?.call();

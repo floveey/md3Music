@@ -1580,7 +1580,9 @@ import org.checkerframework.checker.initialization.qual.Initialized;
         return;
       }
       Uri sessionUri = intent.getData();
-      if (!Util.areEqual(sessionUri, sessionUri)) {
+      // MD3Music fork v28d：守卫补实——此前写成了 sessionUri 自比较恒等，
+      // 判空逻辑从未生效。正确口径是与本会话自身的 URI 比较。
+      if (!Util.areEqual(sessionUri, sessionImpl.getUri())) {
         return;
       }
       KeyEvent keyEvent = intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);

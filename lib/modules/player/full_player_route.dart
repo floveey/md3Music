@@ -188,7 +188,11 @@ void unregisterPlayerLyricsCommand(PlayerLyricsCommandHandler handler) =>
 void sendDockPlayerLyricsCommand() {
   for (final handler
       in List<PlayerLyricsCommandHandler>.of(_lyricsCommandHandlers)) {
-    handler();
+    // v32：单实例异常不阻断后续实例（现状都是 postFrame+pager 空守卫，
+    // 实害低，这里固化"注册者不得打进命令语义"的兜底）。
+    try {
+      handler();
+    } catch (_) {}
   }
 }
 

@@ -1164,7 +1164,7 @@ class AudioPlaybackService : Service() {
         // 用带 SERVICE_INTERFACE action 的 Intent 绑定，确保 onBind 返回非空 binder 使连接成功。
         try {
             val m3Intent = Intent(this, MD3MusicMediaSessionService::class.java)
-                .setAction("androidx.media3.session.MediaSessionService")
+                .setAction(MD3MusicMediaSessionService.ACTION_INTERNAL_MEDIA_HOST_BIND)
             bindService(m3Intent, media3ServiceConnection, Context.BIND_AUTO_CREATE)
             media3ServiceBound = true
         } catch (_: Exception) {}
@@ -1321,6 +1321,11 @@ class AudioPlaybackService : Service() {
             // P0: 暂停时立即释放 WakeLock，避免 CPU 无法休眠造成耗电
             releaseWakeLock()
         }
+
+        // MD3Music fork v32：default 分支也履行 5s 死线——电量/权限驱动的
+        // startForegroundService 拉起后若 startForeground 被拒，ensureForeground
+        // 的 catch 会自停（规避 RemoteServiceException）；服务已在前台时它短路。
+        ensureForeground()
 
         showNotification(
             mediaId,
@@ -2366,8 +2371,8 @@ class AudioPlaybackService : Service() {
         lastDesktopLyricEnabled = desktopLyricEnabled
         lastIsFavorited = isFavorited
         lastDuration = duration
-        // 通知会在下方所有分支中调用 startForeground，标记已进入前台
-        foregroundStarted = true
+        // startForeground 的登记在下方 startForegroundDetached 里完成（成功才置
+        // foregroundStarted），被系统拒绝时 catch 的自停防护保持可达（v32）。
         // 方案B阶段4：随通知更新把桌面歌词/收藏状态推到媒体3会话（渲染成通知栏按钮）。
         pushMedia3CustomActions(
             desktopLyricEnabled,

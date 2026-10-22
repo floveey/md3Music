@@ -396,6 +396,12 @@ class _AppViewState extends State<_AppView> {
   Future<void> _openFullPlayerOnLyrics() async {
     final carMode = context.read<CarModeProvider>();
     await carMode.ready;
+    // v32：同时等首帧屏幕判定注入（autoScreen 档的 screenIsCar 只在首帧后有
+    // 真值，601ms 兜底防面板缺席）；窗口前送达的深链不再被分错支。
+    await Future.any<void>([
+      carMode.metricsReady,
+      Future<void>.delayed(const Duration(milliseconds: 600)),
+    ]);
     if (!mounted) return;
     if (carMode.active) {
       _suppressPanelForCardLyrics(carMode);
@@ -699,6 +705,10 @@ class _AppViewState extends State<_AppView> {
     // 卡片深链的面板让位兜底：根 State 销毁仍持抑制计数还欠着放回——
     // release 成对止损（计数器随 Provider 生命周期存续，防泄漏）。
     _releasePanelForCardLyrics();
+    // v32：命令回调一并摘除——旧 State 的闭包引用已销毁 context，若引擎
+    // 复用重建后首帧前的深链恰好到达，会读到失效 context；置空后这类深链
+    // 不清 pending，由重建后的 _AppView postFrame 消费兜底补开。
+    MediaNotificationService.onOpenCardLyric = null;
     _shortcutConfig?.removeListener(_applyDesktopShortcuts);
     _playerProvider?.removeListener(_onPlayerChanged);
     _backgroundThemeProvider?.removeListener(_onBackgroundChanged);

@@ -171,6 +171,17 @@ class CarModeProvider extends ChangeNotifier {
 
   Future<void> get ready => _loadGate.future;
 
+  /// 首帧屏幕判定注入门：`updateScreenMetrics` 第一次被 UI 层（车机面板
+  /// build）调用后落位。深链分流读 [active] 前应同时等 [ready] 与本门——
+  /// autoScreen 档的 [screenIsCar] 只在首帧后有真值。
+  Completer<void>? _firstMetricsGate;
+
+  Future<void> get metricsReady {
+    final gate = _firstMetricsGate;
+    if (gate == null) return Future<void>.value();
+    return gate.future;
+  }
+
   /// UI 层在 build 阶段按 MediaQuery 尺寸计算并注入两个屏幕判定：
   /// 是否车机屏（[isCarLikeScreen]）、是否竖屏/近方屏（[isPortraitOrSquareScreen]）。
   /// 纯运行时状态，不落盘；只在实际变化时通知，避免尺寸抖动引起无效重建。
@@ -178,6 +189,11 @@ class CarModeProvider extends ChangeNotifier {
     required bool isCar,
     required bool portraitOrSquare,
   }) {
+    // 首帧注入即落门：哪怕恰好与默认值相同走了早退，等待方（深链分流）
+    // 也不能挂在"真值恰好等于默认"的稀有组合上。
+    if (_firstMetricsGate != null && !_firstMetricsGate!.isCompleted) {
+      _firstMetricsGate!.complete();
+    }
     if (_screenIsCar == isCar && _screenPortraitOrSquare == portraitOrSquare) {
       return;
     }

@@ -120,6 +120,14 @@ class MD3MusicMediaSessionService : MediaSessionService() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
+        // MD3Music fork v32：本进程自绑定（AudioPlaybackService onCreate 的媒体3
+        // 通知承载装配）走专用内部 action，不参与连车唤醒判定——onBind 回调语境
+        // 不在入向 Binder 事务内，getCallingUid 只会返回本进程 uid，任何按调用方
+        // 身份做的甄别在这里都不可靠；自绑定从源头换成内部 action，其他绑定路径
+        // （系统媒体框架/车机）照常进判定。
+        if (intent?.action == ACTION_INTERNAL_MEDIA_HOST_BIND) {
+            return super.onBind(Intent("androidx.media3.session.MediaSessionService"))
+        }
         // MD3Music fork: 原子随身听（vivomusicmix）以 vivo action 绑定本服务。
         // media3 onBind 只认 media3 / android.media.browse.MediaBrowserService 两个 action，
         // vivo action 落 default 分支返回 null → 绑定失败 → 原子拿不到 session
@@ -134,22 +142,25 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         return super.onBind(intent)
     }
 
+    companion object {
+        /** 本进程自绑定专用 action：不进连车唤醒判定（v32）。 */
+        const val ACTION_INTERNAL_MEDIA_HOST_BIND =
+            "com.md3music.md3music.internal.MEDIA_HOST_BIND"
+    }
+
     /**
      * MD3Music fork v21（连车拉起，咪咕式）：外部 bind 且当前没有任何活跃媒体会话，
      * 等价于"车机来了但 App 还什么都没有"——走既有线控唤醒链拉起进程并自动续播。
      * 排除项：原子随身听的 vivo 专用 action（进程活着时它常驻绑定，放行会变成变相
-     * 开机自播）；15s 节流防重试风暴；flutter.settings_autoplay_on_car_connect 默认
-     * 开可关。拉起链：startForegroundService(AudioPlaybackService, ACTION_MEDIA_BUTTON,
+     * 开机自播）、本进程自绑定（专用 action，见 onBind）。15s 节流防重试风暴；
+     * flutter.settings_autoplay_on_car_connect 默认开可关。拉起链：
+     * startForegroundService(AudioPlaybackService, ACTION_MEDIA_BUTTON,
      * command="play", wakeOrigin=car) → ensureForeground → headless 引擎恢复 →
      * playerReady 后派发 play（同时头侧按 wakeOrigin 放开媒体会话创建，车机卡片
      * 才有内容）。
      */
     private fun maybeWakeForCarConnect(action: String?) {
-        // MD3Music fork v31：同进程自绑定不算连车——AudioPlaybackService 在
-        // onCreate 会以标准 MediaSessionService action 自绑本服务（媒体3通知
-        // 承载装配），本机投屏（投电视/平板）虚拟屏常驻的设备上，这次自绑定
-        // 会被"虚拟屏 exists"门误判成真连车，无车也自动拉起续播。
-        if (android.os.Binder.getCallingUid() == android.os.Process.myUid()) return
+        if (action == ACTION_INTERNAL_MEDIA_HOST_BIND) return
         if (action == "com.vivo.musicwidgetmix.support.service") return
         if (!autoWakeEnabled) return
         // MD3Music fork v26：标准 MediaSessionService 绑定在手机本地也会发生

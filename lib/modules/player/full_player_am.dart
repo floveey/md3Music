@@ -423,13 +423,13 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     super.initState();
     // 音乐震动「播放页启用」范围以本页在场为准（含拖拽覆盖层实例；
     // 覆盖层与接管的页面路由可能短暂并存，服务侧用计数消化，勿改回布尔）。
-        MusicHapticsService.instance.setPlayerPageActive(true);
-        WidgetsBinding.instance.addObserver(this);
-        // MD3Music fork v31：歌词命令口改注册集合（先注册的存活实例不再被
-        // 后注册实例的注销挤掉，重放"进了但停的不是歌词页"即不会在拖拽
-        // 路径复活）。
-        registerPlayerLyricsCommand(_goDockLyrics);
-        if (Platform.isWindows) {
+    MusicHapticsService.instance.setPlayerPageActive(true);
+    WidgetsBinding.instance.addObserver(this);
+    // MD3Music fork v31：歌词命令口改注册集合（先注册的存活实例不再被
+    // 后注册实例的注销挤掉，重放"进了但停的不是歌词页"即不会在拖拽
+    // 路径复活）。
+    registerPlayerLyricsCommand(_goDockLyrics);
+    if (Platform.isWindows) {
       SettingsRepository.windowsLiveSettingsRevision.addListener(
         _reloadWindowsPlayerSettings,
       );
@@ -891,8 +891,8 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
 
   @override
   void dispose() {
-    // 与 initState 的命令口注册成对：像素级摘除自己的撕取（集合 remove
-    // 对注册过即生效），存活实例（路由/面板）不受影响。
+    // 与 initState 的命令口注册成对：集合 remove 只摘除自己的注册，
+    // 存活实例（路由/面板）不受影响。
     unregisterPlayerLyricsCommand(_goDockLyrics);
     if (Platform.isWindows) {
       SettingsRepository.windowsLiveSettingsRevision.removeListener(
@@ -4408,7 +4408,6 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     _pagerKey.currentState?.settleNearest();
   }
 
-  /// 程序化切页（封面页点击、歌词页点击等）。
   /// 卡片深链在车机模式下的落点：指挥本面板实例切到歌词页。统一 postFrame：
   /// 命令可能在面板实例 initState 后、pager 未就绪的当帧到达，此时 goToPage
   /// 是 no-op，落一帧等它就位再切。
@@ -4418,6 +4417,7 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
     });
   }
 
+  /// 程序化切页（封面页点击、歌词页点击等）。
   void _goToTab(int index) => _pagerKey.currentState?.goToPage(index);
 
   /// 歌词为空时的「暂无歌词」空状态（AM 深色背景，白 70% 图标 + 文字）。

@@ -766,6 +766,9 @@ class KugouApiClient {
   }
 
   Future<void> clearCookies() async {
+    // v34：对齐其余登录态写者（setLoginCookies/switchToUser/removeAccount 均
+    // 先 ensure）——init 读回 Keystore 在途时，同步清空会被续延的 init 覆写。
+    await _ensureInitialized();
     final oldUserid = _userid;
 
     _token = null;

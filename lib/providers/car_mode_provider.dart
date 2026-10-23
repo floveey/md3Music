@@ -45,6 +45,7 @@ class CarModeProvider extends ChangeNotifier {
   bool _autoScreenTouched = false;
   bool _ratioTouched = false;
   bool _sideTouched = false;
+  bool _dockClearanceTouched = false;
 
   /// 是否已有一次通知被推迟到微任务队列（见 [_notifySafely]）。
   bool _notifyScheduled = false;
@@ -72,6 +73,7 @@ class CarModeProvider extends ChangeNotifier {
     final clamped = value.isFinite
         ? value.clamp(0.0, kCarModeDockClearanceMax)
         : kCarModeBottomDockClearance;
+    _dockClearanceTouched = true;
     final changed = clamped != _dockClearanceDp;
     // Windows 滑块先以 persist:false 预览，松手传入同值也必须写盘。
     if (!changed && !(Platform.isWindows && persist)) return;
@@ -154,7 +156,9 @@ class CarModeProvider extends ChangeNotifier {
       if (!_autoScreenTouched) _autoScreenEnabled = autoScreen;
       if (!_ratioTouched) _panelRatio = ratio;
       if (!_sideTouched) _panelSide = side;
-      _dockClearanceDp = clearance;
+      // v34：与上面四个 touched 门同模型——载入窗口里用户拖过 dock 避让
+      // 滑条时，不得用磁盘旧值盖回内存新值（磁盘已正确，错的是盖回）。
+      if (!_dockClearanceTouched) _dockClearanceDp = clearance;
       _notifySafely();
     } catch (_) {
       // 读取失败保持默认（关闭），不影响启动。

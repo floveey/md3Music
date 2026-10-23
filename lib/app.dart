@@ -394,6 +394,11 @@ class _AppViewState extends State<_AppView> {
   CarModeProvider? _cardLyricsCarMode;
 
   Future<void> _openFullPlayerOnLyrics() async {
+    // v34：首行守卫必须先于 context.read——冷启动消费路径经
+    // consumePendingOpenCardLyric().then(_openFullPlayerOnLyrics)，旧 State 的
+    // 闭包在 dispose 后仍可能在途执行（引擎复用重建窗口），无守卫会在
+    // deactivated ancestor 上抛非受检异常并吞掉本代次深链。
+    if (!mounted) return;
     final carMode = context.read<CarModeProvider>();
     await carMode.ready;
     // v32：同时等首帧屏幕判定注入（autoScreen 档的 screenIsCar 只在首帧后有

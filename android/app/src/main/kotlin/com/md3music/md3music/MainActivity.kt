@@ -247,9 +247,12 @@ class MainActivity : FlutterActivity() {
 
     /**
      * MD3Music fork v21 车机卡片深链：卡片点击走 sessionActivity（启动意图带
-     * md3_open_lyric_fullscreen 标记）且 Activity 跑在投屏虚拟屏（displayId≠主屏）
-     * 时才转发 Dart 打开全屏歌词——手机上点通知栏卡片（主屏）维持旧行为，
-     * 满足「只有车机有效」。
+     * md3_open_lyric_fullscreen 标记），判据为**设备级存在任一非默认屏**
+     * （dm.displays 有 displayId≠DEFAULT_DISPLAY，与 MSS 连车唤醒判据同源）——
+     * 不是"Activity 跑在虚拟屏"：投屏形态下 Flutter Activity 常驻手机主屏，
+     * 车机/投影画面由 RunningStackSide 虚拟屏承载，按 Activity 所在屏判会恒判
+     * 否。取舍：手机连接 PC 投屏/镜像产生第二显示时，主屏点卡片也会直达全屏
+     * 歌词（同义"正在外投"，视为合理语义）；不满足则维持手机旧行为。
      */
     private fun maybeHandleOpenLyricIntent(intent: Intent?) {
         if (intent?.getBooleanExtra("md3_open_lyric_fullscreen", false) != true) return

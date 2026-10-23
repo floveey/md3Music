@@ -1244,6 +1244,11 @@ class AudioPlaybackService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
+                // MD3Music fork v34：前台登记已撤销，必须复位标志——同实例后续
+                // 的 fg start（线控唤醒链）依赖 ensureForeground 重新登记，
+                // flag 残留 true 会把 v32 的 5s 死线防护短路失效（服务被
+                // stopForeground 后不再 startForeground，5 秒内必崩）。
+                foregroundStarted = false
                 releaseWakeLock()
                 isNowPlaying = false
                 // 停止播放/退出 App 后锁屏歌词不应残留
@@ -1421,25 +1426,7 @@ class AudioPlaybackService : Service() {
             }
             MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
                 .invokeMethod(method, args)
-        } else {
-            sendFlutterCommand(action)
         }
-    }
-
-    private fun sendFlutterCommand(action: String) {
-        val method = when (action) {
-            ACTION_PREV -> "previous"
-            ACTION_PAUSE -> "pause"
-            ACTION_PLAY_PAUSE -> "togglePlayPause"
-            ACTION_NEXT -> "next"
-            ACTION_TOGGLE_DESKTOP_LYRIC -> "toggleDesktopLyric"
-            ACTION_TOGGLE_FAVORITE -> "toggleFavorite"
-            else -> return
-        }
-        val intent = Intent("com.md3music.md3music.FLUTTER_COMMAND").apply {
-            putExtra("method", method)
-        }
-        sendBroadcast(intent)
     }
 
     /// 解决方案B阶段5：前台服务保活通知。
@@ -1854,6 +1841,8 @@ class AudioPlaybackService : Service() {
                     }
                     "hideNotification" -> {
                         stopForeground(STOP_FOREGROUND_REMOVE)
+                        // MD3Music fork v34：同 ACTION_STOP，前台登记撤销后复位标志。
+                        foregroundStarted = false
                         releaseWakeLock()
                         isNowPlaying = false
                         LockScreenLyricActivity.dismiss()

@@ -31,8 +31,10 @@ class MD3MusicMediaSessionService : MediaSessionService() {
 
     /** 连车唤醒：外部 bind 且无活跃会话时自动拉起+续播（咪咕式），默认开 */
     private var autoWakeEnabled = true
-    /** 上次触发改唤醒的时刻（节流防重试风暴） */
-    private var lastCarWakeAt = 0L
+    /** 上次触发连车唤醒的时刻（elapsedRealtime，节流防重试风暴）。哨值 -15s：
+     *  "从未唤醒过"不等于"刚唤醒过"——冷开机 15 秒内到达的首个外部绑定期，
+     *  lastCarWakeAt=0 会让 now-0<15000 恒真，把开机即 bind 的车机全程错过。 */
+    private var lastCarWakeAt = -15_000L
 
     override fun onCreate() {
         // 所有机型都安装本 App 的媒体通知 Provider：底层仍是 media3 默认实现，额外做两件事
@@ -199,6 +201,82 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         } catch (t: Throwable) {
             Log.w("CarAutoResume", "wake dispatch failed", t)
         }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // MD3Music fork v34：vendored MediaSessionService.onStartCommand 死分支的
+        // FGS 5 秒死线兜底。通知栏"播放"按钮（未播放态）经 PendingIntent.
+        // getForegroundService 拉起本服务，系统强制 5 秒内 startForeground；恰逢
+        // 会话 release 与通知取消的竞态窗（uri 查不到已注销会话 + app 侧无活跃
+        // 会话）时，vendored 死分支直接 return START_STICKY 且无人调
+        // startForeground —— ForegroundServiceDidNotStartInTimeException。
+        // 判据收窄到 FGS 型入口（keycode==PLAY 那一路才用 getForegroundService，
+        // 暂停/切歌走普通 startService 无死线）。兜底：占位 startForeground
+        // 护住死线；super 归来仍无会话则立即收敛 stopForeground+stopSelf（原先
+        // 也只是空转 START_STICKY，收敛只提前退出）；若 super 正常路径挂出真实
+        // 通知，占位被同 id（1001）覆盖，无感知。intent=null 的 sticky 重启无
+        // fgRequired 死线，不干预。
+        val uri = intent?.data
+        val fgsDeadBranch = intent != null &&
+            Intent.ACTION_MEDIA_BUTTON == intent.action &&
+            uri != null &&
+            AudioPlayer.getActiveMediaSession() == null &&
+            (intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                as? android.view.KeyEvent)?.keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+        var guarded = false
+        if (fgsDeadBranch) {
+            try {
+                val nm = getSystemService(android.app.NotificationManager::class.java)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    if (nm?.getNotificationChannel(
+                            DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID
+                        ) == null
+                    ) {
+                        nm?.createNotificationChannel(
+                            android.app.NotificationChannel(
+                                DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID,
+                                "MD3Music",
+                                android.app.NotificationManager.IMPORTANCE_MIN,
+                            )
+                        )
+                    }
+                }
+                startForeground(
+                    DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID,
+                    androidx.core.app.NotificationCompat.Builder(
+                        this,
+                        DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID
+                    )
+                        .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                        .setContentTitle("MD3Music")
+                        .setShowWhen(false)
+                        .build()
+                )
+                guarded = true
+                Log.i(
+                    "CarAutoResume",
+                    "onStartCommand dead-branch: FGS guard started"
+                )
+            } catch (t: Throwable) {
+                // 占位被 ROM 拒绝属极端（原触发场景本身极窄），尽力而为：
+                // 起不来就自停，至少不给无意义的空转实例。
+                Log.w("CarAutoResume", "onStartCommand FGS guard failed", t)
+                stopSelf()
+                return START_STICKY
+            }
+        }
+        val result = super.onStartCommand(intent, flags, startId)
+        if (guarded && AudioPlayer.getActiveMediaSession() == null) {
+            // super 走的就是死分支（vendored 对该 intent 必然静默返回），收敛退出。
+            try {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } catch (t: Throwable) {
+                Log.w("CarAutoResume", "onStartCommand guard converge fail", t)
+            }
+            stopSelf()
+            Log.i("CarAutoResume", "onStartCommand dead-branch: converged to stop")
+        }
+        return result
     }
 
     override fun onDestroy() {

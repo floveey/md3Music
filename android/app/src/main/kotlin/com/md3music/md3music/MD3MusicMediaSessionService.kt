@@ -126,7 +126,8 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // 身份做的甄别在这里都不可靠；自绑定从源头换成内部 action，其他绑定路径
         // （系统媒体框架/车机）照常进判定。
         if (intent?.action == ACTION_INTERNAL_MEDIA_HOST_BIND) {
-            return super.onBind(Intent("androidx.media3.session.MediaSessionService"))
+            // v33：代解析用行长常量（与字符字面量逐字等价），避免漂移。
+            return super.onBind(Intent(MediaSessionService.SERVICE_INTERFACE))
         }
         // MD3Music fork: 原子随身听（vivomusicmix）以 vivo action 绑定本服务。
         // media3 onBind 只认 media3 / android.media.browse.MediaBrowserService 两个 action，

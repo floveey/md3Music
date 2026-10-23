@@ -1173,7 +1173,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                         android.util.Log.w("UsbAudioSinkCtrl", "stall recovery seek failed: " + e);
                     }
                 });
-            });
+            }, AudioPlayer.this);
             // MD3Music fork: 固定 audioSessionId，使 Media3 MediaSession 与 AudioTrack
             // 关联。系统（小米等）按「AudioTrack 的 audioSessionId 是否与 MediaSession
             // 关联」判定播放器可识别性（hasUid）：未关联时独占型中断（如 B 站视频
@@ -2524,6 +2524,9 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         }
         // MD3Music fork（阶段6·收敛单一会话）：注销实例登记
         unregisterPlayer(this);
+        // MD3Music fork（v35 泄漏防线）：停喂自愈静态监听按 identity 释放——
+        // 静态滞留已 dispose 实例（含 context 引用）在无下次播放创建时永不释放。
+        UsbAudioSinkController.clearStallRecoveryListenerIfCurrent(this);
         // MD3Music fork: 本播放器销毁后清空活跃引用，避免注入至过期会话
         if (sActivePlayer == this) {
             sActivePlayer = null;

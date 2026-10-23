@@ -64,6 +64,35 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
   /// 当前正在加载的文件路径，避免重复加载同一文件
   String? _loadingPath;
 
+  /// MD3Music fork v37：在线封面失败自愈重试（有界——同 URI 至多一次）。
+  /// kugou 图床偶现抖动/超时时 CachedNetworkImage 一次失败即定格占位，
+  /// 岛/锁屏走原生链没受影响，唯独 App 内一错到底。重试用换 Key 强制
+  /// 重新 resolve（failed 请求不污染缓存），二连败维持占位至切歌。
+  static const int _maxHttpAttempts = 2;
+  static const Duration _httpRetryDelay = Duration(milliseconds: 1600);
+  String? _attemptUri;
+  int _attempt = 0;
+  bool _retryScheduled = false;
+
+  void _noteUriChanged() {
+    if (widget.artworkUri != _attemptUri) {
+      _attemptUri = widget.artworkUri;
+      _attempt = 0;
+      _retryScheduled = false;
+    }
+  }
+
+  void _scheduleHttpRetry(String uri) {
+    if (_retryScheduled || _attempt >= _maxHttpAttempts - 1) return;
+    _retryScheduled = true;
+    Future<void>.delayed(_httpRetryDelay, () {
+      _retryScheduled = false;
+      if (!mounted || widget.artworkUri != uri) return;
+      if (_attempt >= _maxHttpAttempts - 1) return;
+      if (mounted) setState(() => _attempt++);
+    });
+  }
+
   @override
   void didUpdateWidget(PlayerArtworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -74,6 +103,7 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
       _embeddedLoaded = false;
       _loadingPath = null;
     }
+    _noteUriChanged();
   }
 
   /// 从文件路径读取内嵌封面
@@ -132,6 +162,8 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
   }
 
   Widget _buildArtwork(BuildContext context, int decodeWidth) {
+    // 在线封面自愈重试：URI 变化经此统一重置（didUpdateWidget 之外兜底）
+    _noteUriChanged();
     final cs = Theme.of(context).colorScheme;
     final uri = widget.artworkUri;
     final bg = widget.backgroundColor ?? cs.surfaceContainerHighest;
@@ -185,6 +217,7 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
       // 内嵌封面缺失或偏好在线：用匹配到的在线封面
       if (hasMatchedUri) {
         return CachedNetworkImage(
+          key: ValueKey('matched:$matchedUri#${_attempt}'),
           imageUrl: matchedUri,
           width: widget.isFill ? double.infinity : null,
           height: widget.isFill ? double.infinity : null,
@@ -192,7 +225,8 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
           memCacheWidth: decodeWidth,
           placeholder: (_, _) => _placeholder(bg, icon, iSize),
           errorWidget: (_, _, _) {
-            // 在线封面加载失败：回落内嵌封面（有则显示）
+            // 在线封面加载失败：核对一次（同 URI 至多一次重试），再失败回落内嵌
+            _scheduleHttpRetry(matchedUri);
             if (_embeddedBytes != null) {
               return Image.memory(
                 _embeddedBytes!,
@@ -257,13 +291,18 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
     // http(s):// 在线封面：用 CachedNetworkImage（带磁盘缓存）
     if (uri.startsWith('http://') || uri.startsWith('https://')) {
       return CachedNetworkImage(
+        // v37：自愈重试——失败换 Key 重新 resolve（网络失败不入缓存）
+        key: ValueKey('net:$uri#${_attempt}'),
         imageUrl: uri,
         width: widget.isFill ? double.infinity : null,
         height: widget.isFill ? double.infinity : null,
         fit: widget.fit,
         memCacheWidth: decodeWidth,
         placeholder: (_, _) => _placeholder(bg, icon, iSize),
-        errorWidget: (_, _, _) => _placeholder(bg, icon, iSize),
+        errorWidget: (_, _, _) {
+          _scheduleHttpRetry(uri);
+          return _placeholder(bg, icon, iSize);
+        },
       );
     }
 

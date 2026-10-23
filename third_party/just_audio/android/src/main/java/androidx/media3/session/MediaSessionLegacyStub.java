@@ -904,6 +904,27 @@ import org.checkerframework.checker.initialization.qual.Initialized;
     com.ryanheise.just_audio.AudioPlayer.logShadowPlaybackSync(state);
   }
 
+  /// MD3Music fork（方向3·队列镜像，v36）：活跃会话每次发布队列（含清空）时同步
+  /// 影子——原子岛钉的是首个会话（shadow），收敛保活后影子自身时间线已清空，列
+  /// 表面板块因此空到底。快照时序问题（岛先连、队列后发）也由每次活跃发布刷新覆盖。
+  /// 队列条目复用本会话已转换好的一批（封面按既有异步链携带），不重复解码。
+  private void mirrorQueueToShadowSessionsIfActive(@Nullable List<QueueItem> queue) {
+    MediaSession activeSession = com.ryanheise.just_audio.AudioPlayer.getActiveMediaSession();
+    if (activeSession == null) return;
+    if (!com.ryanheise.just_audio.AudioPlayer.isShadowPlaybackMirrorEnabled()) return;
+    if (sessionImpl.getInstanceForShadowMirrorIdentity() != activeSession) return;
+    @Nullable CharSequence title = null;
+    try {
+      title = sessionCompat.getController().getQueueTitle();
+    } catch (Throwable t) {
+      // 标题快照失败仅影响列表标题，不阻断队列镜像
+    }
+    MediaSessionCompat.mirrorQueueToShadows(queue, title, sessionCompat);
+    Log.i(
+        "AudioFocusFork",
+        "shadow queue mirror: items=" + (queue == null ? -1 : queue.size()));
+  }
+
   private void handleMediaRequest(MediaItem mediaItem, boolean play) {
     dispatchSessionTaskWithPlayerCommand(
         COMMAND_SET_MEDIA_ITEM,
@@ -1307,6 +1328,10 @@ import org.checkerframework.checker.initialization.qual.Initialized;
     private void updateQueue(Timeline timeline) {
       if (!isQueueEnabled() || timeline.isEmpty()) {
         setQueue(sessionCompat, /* queue= */ null);
+        // MD3Music fork（方向3·队列镜像）：活跃会话的队列清空也要同步影子
+        // （播放列表清空/引擎收敛后影子不得残留旧列表）；非活跃影子的自身
+        // 清空事件经 IfActive 门自然跳过，不会抹掉已镜像的队列。
+        mirrorQueueToShadowSessionsIfActive(null);
         return;
       }
       List<MediaItem> mediaItemList = LegacyConversions.convertToMediaItemList(timeline);
@@ -1370,6 +1395,8 @@ import org.checkerframework.checker.initialization.qual.Initialized;
         // which means we can safely send long lists.
         setQueue(sessionCompat, queueItemList);
       }
+      // MD3Music fork（方向3·队列镜像）：活跃队列发布即同步影子。
+      mirrorQueueToShadowSessionsIfActive(queueItemList);
     }
 
     @Override

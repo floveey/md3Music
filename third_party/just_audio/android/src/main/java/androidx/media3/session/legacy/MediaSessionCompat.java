@@ -421,6 +421,35 @@ public class MediaSessionCompat {
     }
   }
 
+  /// MD3Music fork（方向3·队列镜像，v36）：把队列（含标题）同步进影子会话。
+  /// 原子岛把 MediaControllerCompat 长期钉在首个会话（shadow）上：收敛保活后
+  /// 影子自身的时间线已清空，元数据/播放态有镜像而队列无人写，其列表面板恒空
+  /// （"vivo 原子岛播放列表获取不到"的根因）。形状与 mirrorPlaybackStateToShadows
+  /// 同构；标题空传不影响 getQueue 可读性。
+  public static void mirrorQueueToShadows(
+      @Nullable List<QueueItem> queue,
+      @Nullable CharSequence title,
+      @Nullable MediaSessionCompat excludeCompat) {
+    MediaSessionImplApi21 exclude = null;
+    if (excludeCompat != null
+        && excludeCompat.mImpl instanceof MediaSessionImplApi21) {
+      exclude = (MediaSessionImplApi21) excludeCompat.mImpl;
+    }
+    java.util.ArrayList<MediaSessionImplApi21> live;
+    synchronized (sVivoLrcLock) {
+      live = new java.util.ArrayList<>(sLiveApi21Impls);
+    }
+    for (MediaSessionImplApi21 impl : live) {
+      if (impl == exclude || impl.mDestroyed) continue;
+      try {
+        impl.setQueue(queue);
+        impl.setQueueTitle(title);
+      } catch (Throwable t) {
+        // 单个 session 失败不影响其他
+      }
+    }
+  }
+
   /// 原子随身听 lrc_change 是否需要发送：歌词变化立即发，相同歌词 25s 节流兜底
   /// （覆盖"车机/组件在播放开始后才连上"的情况）。
   static boolean shouldSendVivoLrcChange(String wholeLrc) {

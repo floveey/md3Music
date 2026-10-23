@@ -310,7 +310,8 @@ jobs:
 
       # 自动创建 Release 并上传 APK（仅 push 到 main/master 时）
       - name: Create CI Release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ci-${{ github.sha }}
@@ -413,7 +414,8 @@ jobs:
 
       # 追加 Windows zip 到 Android job 创建的 CI Release（同一个 tag）
       - name: Append Windows zip to CI Release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ci-${{ github.sha }}

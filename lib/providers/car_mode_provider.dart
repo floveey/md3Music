@@ -174,11 +174,12 @@ class CarModeProvider extends ChangeNotifier {
   /// 首帧屏幕判定注入门：`updateScreenMetrics` 第一次被 UI 层（车机面板
   /// build）调用后落位。深链分流读 [active] 前应同时等 [ready] 与本门——
   /// autoScreen 档的 [screenIsCar] 只在首帧后有真值。
+  /// v33：两处都是懒建——上一版只读判 null 导致整道门从未完成（死门被
+  /// 三路代理坐实），这里补上懒建配对：任何一方先到都能把门挂起来。
   Completer<void>? _firstMetricsGate;
 
   Future<void> get metricsReady {
-    final gate = _firstMetricsGate;
-    if (gate == null) return Future<void>.value();
+    final gate = _firstMetricsGate ??= Completer<void>();
     return gate.future;
   }
 
@@ -189,11 +190,10 @@ class CarModeProvider extends ChangeNotifier {
     required bool isCar,
     required bool portraitOrSquare,
   }) {
-    // 首帧注入即落门：哪怕恰好与默认值相同走了早退，等待方（深链分流）
-    // 也不能挂在"真值恰好等于默认"的稀有组合上。
-    if (_firstMetricsGate != null && !_firstMetricsGate!.isCompleted) {
-      _firstMetricsGate!.complete();
-    }
+    // 首帧注入即落门：门由本方或 metricsReady 懒建。哪怕恰好与默认值
+    // 相同走了早退，等待方也不能挂在"真值恰好等于默认"的稀有组合上。
+    final gate = _firstMetricsGate ??= Completer<void>();
+    if (!gate.isCompleted) gate.complete();
     if (_screenIsCar == isCar && _screenPortraitOrSquare == portraitOrSquare) {
       return;
     }

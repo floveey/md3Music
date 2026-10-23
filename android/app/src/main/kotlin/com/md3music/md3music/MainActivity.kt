@@ -574,7 +574,14 @@ class MainActivity : FlutterActivity() {
                             putExtra(FloatingLyricService.EXTRA_LYRIC, call.argument<String>("lyric") ?: "")
                             putExtra(FloatingLyricService.EXTRA_TITLE, call.argument<String>("title") ?: "")
                         }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+                        // v33：与 showNotification 调用点同构——前台被 ROM 拒时吞掉
+                        // ForegroundServiceStartNotAllowedException（悬浮窗自身
+                        // 台账已按失败路径自停，无 5s duty）。
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+                        } catch (t: Throwable) {
+                            Log.w("MainActivity", "floating update start rejected: ${t.message}")
+                        }
                     }
                 }
                 "updateLyric" -> {
@@ -848,10 +855,16 @@ class MainActivity : FlutterActivity() {
                         result.error("PERMISSION_DENIED", "需要悬浮窗权限", null)
                     } else {
                         val intent = Intent(this, FloatingRecognitionService::class.java)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            startForegroundService(intent)
-                        } else {
-                            startService(intent)
+                        // v33：与 :723 调用点同构——被拒不冒主线程（FRS 自身
+                        // onSave 失败/停止路径自管，无 5s duty）。
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(intent)
+                            } else {
+                                startService(intent)
+                            }
+                        } catch (t: Throwable) {
+                            Log.w("MainActivity", "recognition start rejected: ${t.message}")
                         }
                         result.success(true)
                     }

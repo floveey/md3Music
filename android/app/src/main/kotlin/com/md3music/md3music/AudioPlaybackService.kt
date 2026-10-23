@@ -1161,7 +1161,8 @@ class AudioPlaybackService : Service() {
         // 恢复蓝牙歌词开关：避免冷启动后开关丢失（Flutter 端也会再推一次，幂等）
         restoreBluetoothLyricState()
         // 方案B阶段1：绑定媒体3会话承载服务（实例化 host，供 fork 会话渲染 now playing 通知）。
-        // 用带 SERVICE_INTERFACE action 的 Intent 绑定，确保 onBind 返回非空 binder 使连接成功。
+        // v32/v33：绑定走专用内部 action（onBind 首分支代为解析标准 media3
+        // SERVICE_INTERFACE，binder 等价；不进连车唤醒判定）。
         try {
             val m3Intent = Intent(this, MD3MusicMediaSessionService::class.java)
                 .setAction(MD3MusicMediaSessionService.ACTION_INTERNAL_MEDIA_HOST_BIND)

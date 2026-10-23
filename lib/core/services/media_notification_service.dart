@@ -144,7 +144,10 @@ class MediaNotificationService {
           // 否则车机冷启动的点击会被静默丢弃（v29 的"投递即清"过激）。
           if (onOpenCardLyric != null) {
             onOpenCardLyric!();
-            unawaited(_channel.invokeMethod('consumePendingOpenCardLyric')
+            // v33：显式 dynamic——catchError 的返回形态与 Future<dynamic?>
+            // 匹配，防止日后改成强类型时 catcher 在 zone 抛 TypeError。
+            unawaited(_channel
+                .invokeMethod<dynamic>('consumePendingOpenCardLyric')
                 .catchError((Object _) {}));
           }
           break;

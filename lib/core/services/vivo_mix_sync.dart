@@ -131,6 +131,7 @@ class VivoMixSync {
     final player = _player;
     final favorites = _favorites;
     final library = _library;
+    debugPrint('[CardLyricLink] vivoMixPlay: $mediaId');
     if (player == null || favorites == null || library == null) return;
 
     Song? song;
@@ -160,7 +161,11 @@ class VivoMixSync {
           .where((s) => s.displayName == title && s.artist == artist)
           .firstOrNull;
     }
-    if (song == null) return;
+    if (song == null) {
+      debugPrint('[CardLyricLink] vivoMixPlay: no match for $mediaId');
+      return;
+    }
+    debugPrint('[CardLyricLink] vivoMixPlay: play ${song.displayName}');
     await player.playSong(song);
   }
 
@@ -168,6 +173,7 @@ class VivoMixSync {
   Future<void> _handleVivoMixPlayMode(int mode) async {
     final player = _player;
     if (player == null) return;
+    debugPrint('[CardLyricLink] vivoMixPlayMode: $mode');
     switch (mode) {
       case 3:
         await player.setLoopMode(AppLoopMode.all);

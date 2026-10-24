@@ -295,8 +295,7 @@ class _SettingsPageState extends State<SettingsPage>
   /// MV 弹幕开关（设置页与播放页浮层按钮共用同一个持久化 key）。
   bool _mvDanmakuEnabled = false;
 
-  /// 歌曲弹幕开关（播放页弹幕层总开关，默认关闭）。
-  bool _songDanmakuEnabled = false;
+  // v46：歌曲弹幕开关改读静态镜像（ValueListenableBuilder），本地字段退场。
 
   /// MV 弹幕透明度（0.1–1.0）。用状态字段而非 FutureBuilder：
   /// FutureBuilder 每次 setState 都会新建 Future → 拖动时值会被旧快照覆盖（回弹）。
@@ -774,7 +773,10 @@ class _SettingsPageState extends State<SettingsPage>
       _autoMatchOnlineInfo = autoMatchOnlineInfo;
       _mvDanmakuEnabled = mvDanmakuEnabled;
       _mvDanmakuOpacity = mvDanmakuOpacity;
-      _songDanmakuEnabled = songDanmakuEnabled;
+      // v46：歌曲弹幕开关已改 ValueListenableBuilder（读静态镜像），
+      // getSongDanmakuEnabled() 的调用保留在上方——它负责启动时把盘上的值
+      // 回填进静态镜像（song_danmaku_host 读镜像而非盘）。
+      // _songDanmakuEnabled 本地字段随之退场。
       // 启动时把音量均衡设置同步给播放器（当前曲目若已加载会自动重算）
       AudioService().setVolumeNormalization(
         enabled: volumeNormalizationEnabled,
@@ -4757,20 +4759,64 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
         ),
         // 歌曲弹幕：控制是否在播放页叠加弹幕层（TV 无文本输入能力，不编入 TV 包）
         // search: 歌曲 弹幕 播放页 封面 滚动
+        // v46：改 ValueListenableBuilder（同一静态镜像）——本地 setState +
+        // 异步初始化回填存在覆盖用户点击的竞态（审查实测"设置里打开弹幕不生效"）。
+        // 开启时下方追加速度滑条与颜色选择。
         if (!kTvBuild)
-          SwitchListTile(
-            secondary: Icon(
-              Icons.subtitles_outlined,
-              color: colorScheme.primary,
+          ValueListenableBuilder<bool>(
+            valueListenable: _settingsRepository.songDanmakuEnabled,
+            builder: (context, enabled, _) => Column(
+              children: [
+                SwitchListTile(
+                  secondary: Icon(
+                    Icons.subtitles_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('显示歌曲弹幕'),
+                  subtitle: const Text('在播放页叠加歌曲弹幕'),
+                  value: enabled,
+                  onChanged: (v) {
+                    AppHaptics.lightImpact(HapticCategory.control);
+                    _settingsRepository.setSongDanmakuEnabled(v);
+                  },
+                ),
+                if (enabled)
+                  ValueListenableBuilder<double>(
+                    valueListenable: _settingsRepository.songDanmakuSpeed,
+                    builder: (context, speed, _) => ListTile(
+                      leading: Icon(Icons.speed_outlined,
+                          color: colorScheme.primary),
+                      title: const Text('弹幕速度'),
+                      subtitle: M3ESlider(
+                        decoration: const M3ESliderDecoration(
+                          haptic: M3EHapticFeedback.medium,
+                        ),
+                        value: speed,
+                        min: 0.5,
+                        max: 2.0,
+                        divisions: 15,
+                        label: '×${speed.toStringAsFixed(2)}',
+                        onChanged: (v) =>
+                            _settingsRepository.setSongDanmakuSpeed(v),
+                      ),
+                    ),
+                  ),
+                if (enabled)
+                  ValueListenableBuilder<int?>(
+                    valueListenable: _settingsRepository.songDanmakuColor,
+                    builder: (context, colorValue, _) => ListTile(
+                      leading: Icon(Icons.palette_outlined,
+                          color: colorScheme.primary),
+                      title: const Text('弹幕颜色'),
+                      subtitle: _DanmakuColorRow(
+                        current: colorValue,
+                        onSelected: (c) =>
+                            _settingsRepository.setSongDanmakuColor(c),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            title: const Text('显示歌曲弹幕'),
-            subtitle: const Text('在播放页叠加歌曲弹幕'),
-            value: _songDanmakuEnabled,
-            onChanged: (v) async {
-              AppHaptics.lightImpact(HapticCategory.control);
-              setState(() => _songDanmakuEnabled = v);
-              await _settingsRepository.setSongDanmakuEnabled(v);
-            },
           ),
         // MV 弹幕透明度：弹幕关闭时不显示（无可调对象）
         if (_mvDanmakuEnabled)
@@ -6949,6 +6995,62 @@ class _FlymeLyricAdvanceTileState extends State<_FlymeLyricAdvanceTile> {
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// MD3Music fork v46：歌曲弹幕颜色选择行——预设色板（null=默认白）+ 选中环。
+class _DanmakuColorRow extends StatelessWidget {
+  const _DanmakuColorRow({required this.current, required this.onSelected});
+
+  final int? current;
+  final ValueChanged<int?> onSelected;
+
+  static const List<int?> _preset = <int?>[
+    null, // 默认（跟随弹幕池/白）
+    0xFFFFFFFF, // 白
+    0xFFFFD54F, // 浅黄
+    0xFF80DEEA, // 浅青
+    0xFFA5D6A7, // 浅绿
+    0xFFFFCC80, // 浅橙
+    0xFFF48FB1, // 浅粉
+    0xFFCE93D8, // 浅紫
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final c in _preset)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: InkWell(
+                onTap: () => onSelected(c),
+                customBorder: const CircleBorder(),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: c == null ? Colors.white : Color(c),
+                    border: Border.all(
+                      color: current == c ? primary : Colors.black26,
+                      width: current == c ? 3 : 1,
+                    ),
+                  ),
+                  child: c == null
+                      ? Icon(Icons.auto_awesome,
+                          size: 16, color: Colors.black45)
+                      : null,
+                ),
+              ),
+            ),
         ],
       ),
     );

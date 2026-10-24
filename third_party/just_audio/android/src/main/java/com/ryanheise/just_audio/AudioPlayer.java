@@ -1315,6 +1315,8 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                             // MD3Music fork v45：原子随身听循环模式切换。
                             int mode = args != null
                                     ? args.getInt(VMM_KEY_LOOP_MODE, 1) : 1;
+                            android.util.Log.i("CardLyricLink",
+                                    "onCustomCommand PLAY_MODE: " + mode);
                             listener.onPlayMode(mode);
                         }
                     }
@@ -1330,6 +1332,8 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                         MediaSession session, MediaSession.ControllerInfo controller,
                         String mediaId, androidx.media3.common.Rating rating) {
                     final CustomActionListener listener = sCustomActionListener;
+                    android.util.Log.i("CardLyricLink",
+                            "onSetRating: " + rating);
                     if (listener != null
                             && rating instanceof androidx.media3.common.HeartRating
                             && ((androidx.media3.common.HeartRating) rating).isHeart()) {

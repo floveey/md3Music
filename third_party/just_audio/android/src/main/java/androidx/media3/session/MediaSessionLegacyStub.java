@@ -446,6 +446,16 @@ import org.checkerframework.checker.initialization.qual.Initialized;
 
   @Override
   public void onPlayFromMediaId(@Nullable String mediaId, @Nullable Bundle extras) {
+    // MD3Music fork v40：App 可注入点播钩子——vivo 原子随身听按 media id 回播列表项，
+    // 默认实现会把"只有 mediaId、没有 URI"的 item 塞进 ExoPlayer（播不出且污染
+    // media3 时间线，App 队列是 Dart 自维护的）。钩子返回 true 表示已消费。
+    // 钩子声明在 MediaSessionService（public）——本类包私有，App 侧引用不到。
+    // v46：入口日志——岛列表点播不通时的断点定位（岛是否发、发的是什么 id）。
+    android.util.Log.i("CardLyricLink", "onPlayFromMediaId: " + mediaId);
+    MediaSessionService.PlayFromMediaIdHook hook = MediaSessionService.playFromMediaIdHook;
+    if (hook != null && hook.onPlayFromMediaId(mediaId)) {
+      return;
+    }
     handleMediaRequest(
         createMediaItemForMediaRequest(
             mediaId, /* mediaUri= */ null, /* searchQuery= */ null, extras),

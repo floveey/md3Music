@@ -115,6 +115,10 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   bool _enabled = false;
   bool _bound = false;
 
+  /// v46：弹幕速度倍率与颜色覆盖（设置页可调，静态镜像即时生效）。
+  double _speedScale = 1.0;
+  Color? _overrideColor;
+
   /// `TickerMode` 为 false（例如被离屏 TabView 冻结）时不得产帧。
   bool _tickerVisible = true;
 
@@ -132,7 +136,20 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
     super.initState();
     _enabled = SettingsRepository.songDanmakuEnabled.value;
     SettingsRepository.songDanmakuEnabled.addListener(_onSettingsChanged);
+    SettingsRepository.songDanmakuSpeed.addListener(_onAppearanceChanged);
+    SettingsRepository.songDanmakuColor.addListener(_onAppearanceChanged);
     SongDanmakuHost.delivery.addListener(_onDelivery);
+  }
+
+  /// v46：速度/颜色变化只影响后续 spawn 与绘制步长——setState 刷新传参即可。
+  void _onAppearanceChanged() {
+    if (!mounted) return;
+    setState(() {
+      _speedScale = SettingsRepository.songDanmakuSpeed.value;
+      _overrideColor = SettingsRepository.songDanmakuColor.value == null
+          ? null
+          : Color(SettingsRepository.songDanmakuColor.value!);
+    });
   }
 
   @override
@@ -170,6 +187,8 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   @override
   void dispose() {
     SettingsRepository.songDanmakuEnabled.removeListener(_onSettingsChanged);
+    SettingsRepository.songDanmakuSpeed.removeListener(_onAppearanceChanged);
+    SettingsRepository.songDanmakuColor.removeListener(_onAppearanceChanged);
     SongDanmakuHost.delivery.removeListener(_onDelivery);
     _player?.positionNotifier.removeListener(_onPositionSample);
     _player?.removeListener(_onPlayerChanged);
@@ -399,6 +418,9 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
             child: ScrollDanmakuLayer(
               controller: _danmaku,
               highlightColor: colorScheme.primary,
+              // v46：速度倍率与颜色覆盖（设置页可调）。
+              speed: 120 * _speedScale,
+              overrideColor: _overrideColor,
             ),
           ),
         ),

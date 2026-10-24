@@ -41,6 +41,10 @@ class SettingsRepository {
   static const String _keyMvDanmakuEnabled = 'settings_mv_danmaku_enabled';
   static const String _keyMvDanmakuOpacity = 'settings_mv_danmaku_opacity';
   static const String _keySongDanmakuEnabled = 'settings_song_danmaku_enabled';
+  // MD3Music fork v46：歌曲弹幕速度倍率（0.5~2.0，1.0=默认 120px/s）与颜色
+  //（int color value，null=跟随弹幕池/默认白）。静态镜像供播放页即时生效。
+  static const String _keySongDanmakuSpeed = 'settings_song_danmaku_speed';
+  static const String _keySongDanmakuColor = 'settings_song_danmaku_color';
 
   /// 封面流歌单源（CoverFlowSource.rawValue：'daily' / 'personalFm' / 'homeDiscover'）。
   /// 存原始字符串而非 int 下标：枚举顺序是 UI 契约，持久化不跟它走。
@@ -479,6 +483,48 @@ class SettingsRepository {
     songDanmakuEnabled.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keySongDanmakuEnabled, value);
+  }
+
+  /// MD3Music fork v46：歌曲弹幕速度倍率（0.5~2.0，1.0=默认）。静态镜像供
+  /// 播放页即时生效（同 songDanmakuEnabled 模式：getter 读盘回填、setter
+  /// 写盘前先更新）。
+  static final ValueNotifier<double> songDanmakuSpeed =
+      ValueNotifier<double>(1.0);
+
+  Future<double> getSongDanmakuSpeed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = (prefs.getDouble(_keySongDanmakuSpeed) ?? 1.0).clamp(0.5, 2.0);
+    songDanmakuSpeed.value = v;
+    return v;
+  }
+
+  Future<void> setSongDanmakuSpeed(double value) async {
+    final v = value.clamp(0.5, 2.0);
+    songDanmakuSpeed.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keySongDanmakuSpeed, v);
+  }
+
+  /// MD3Music fork v46：歌曲弹幕颜色（int ARGB；null=跟随弹幕池/默认白）。
+  static final ValueNotifier<int?> songDanmakuColor =
+      ValueNotifier<int?>(null);
+
+  Future<int?> getSongDanmakuColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasColor = prefs.containsKey(_keySongDanmakuColor);
+    final v = hasColor ? prefs.getInt(_keySongDanmakuColor) : null;
+    songDanmakuColor.value = v;
+    return v;
+  }
+
+  Future<void> setSongDanmakuColor(int? value) async {
+    songDanmakuColor.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    if (value == null) {
+      await prefs.remove(_keySongDanmakuColor);
+    } else {
+      await prefs.setInt(_keySongDanmakuColor, value);
+    }
   }
 
   /// 「听歌数据云同步」总开关，默认开启。

@@ -22,6 +22,8 @@ class ScrollDanmakuLayer extends StatefulWidget {
     this.strokeWidth = 1.5,
     this.speed = 120,
     this.highlightColor = const Color(0xFFFFD54F),
+    // MD3Music fork v46：全局颜色覆盖（null=跟随弹幕池/自身颜色）。
+    this.overrideColor,
   });
 
   /// 弹幕的投放/清空/运行态由外部通过它控制（与 `canvas_danmaku` 的
@@ -42,6 +44,9 @@ class ScrollDanmakuLayer extends StatefulWidget {
 
   /// 自己发送的高亮色（由宿主传主题 token，不在本层硬编码语义色）。
   final Color highlightColor;
+
+  /// MD3Music fork v46：全局颜色覆盖（null=跟随弹幕池/自身颜色）。
+  final Color? overrideColor;
 
   @override
   State<ScrollDanmakuLayer> createState() => _ScrollDanmakuLayerState();
@@ -187,7 +192,10 @@ class _ScrollDanmakuLayerState extends State<ScrollDanmakuLayer> {
 
     final scaler = MediaQuery.textScalerOf(context);
     final fontSize = scaler.scale(widget.fontSize);
-    final color = entry.selfSend ? widget.highlightColor : entry.color;
+    // v46：overrideColor 非空时覆盖弹幕池颜色（自己发送的仍用高亮色）。
+    final color = entry.selfSend
+        ? widget.highlightColor
+        : (widget.overrideColor ?? entry.color);
     final style = TextStyle(
       fontSize: fontSize,
       fontWeight: FontWeight.w500,

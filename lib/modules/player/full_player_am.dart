@@ -3449,34 +3449,39 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
 
     // 全屏写真由 _buildFullLayout 的背景层统一绘制；此处只叠加标题，避免 PageView 上下边界形成接缝。
     if (_photoCoverActive) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: verticalPadding,
-              ),
-              // 标题块内部是无 mainAxisSize 的 Column（默认 max）：正常布局里它
-              // 从父 Column 拿到**无界**高度所以收成内容高；本分支经 Align 传入
-              // 有界约束会被撑满整屏、文字顶到顶上。外层再包一个 min Column 把
-              // 无界高度传进去，标题恢复按内容高并贴底。
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildTitleBlockMorph(
-                    playerProvider,
-                    currentSong,
-                    isExpanded: isExpanded,
-                    alignment: CrossAxisAlignment.center,
-                  ),
-                ],
+      // v44：写真背景分支也包弹幕宿主——此前此分支无封面子树、弹幕宿主未挂，
+      // 开启"歌手写真背景"时 AM 风格整页无弹幕（MD3 风格恒有，风格差异实测根因）。
+      // 弹幕滚动区锚在容器顶部 45%，写真模式下即全屏背景的上部，位置合理。
+      return _withDanmaku(
+        Stack(
+          fit: StackFit.expand,
+          children: [
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: verticalPadding,
+                ),
+                // 标题块内部是无 mainAxisSize 的 Column（默认 max）：正常布局里它
+                // 从父 Column 拿到**无界**高度所以收成内容高；本分支经 Align 传入
+                // 有界约束会被撑满整屏、文字顶到顶上。外层再包一个 min Column 把
+                // 无界高度传进去，标题恢复按内容高并贴底。
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTitleBlockMorph(
+                      playerProvider,
+                      currentSong,
+                      isExpanded: isExpanded,
+                      alignment: CrossAxisAlignment.center,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 

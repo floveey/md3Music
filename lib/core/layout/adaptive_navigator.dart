@@ -140,6 +140,30 @@ class ForwardTag {
 class AdaptiveNav {
   const AdaptiveNav._();
 
+  /// MD3Music fork v43：最近一次可见的双栏详情面板 Navigator（由
+  /// [_TwoPanePageState] initState/dispose 登记）。车机卡片深链用它把播放页
+  /// 塞进右窗格——App 层（app.dart）的 context 在壳层之上，拿不到
+  /// DetailPaneScope，只能借这条全局登记。
+  static GlobalKey<NavigatorState>? _latestDetailKey;
+
+  /// MD3Music fork v43：向最近可见的双栏详情面板 push 一个页面。
+  ///
+  /// @return true = 已进详情面板；false = 当前没有可见双栏（调用方退回根 push）。
+  static bool pushDetailGlobal(WidgetBuilder builder) {
+    final nav = _latestDetailKey?.currentState;
+    if (nav == null) return false;
+    nav.push(MaterialPageRoute<void>(builder: builder));
+    return true;
+  }
+
+  static void registerDetailKey(GlobalKey<NavigatorState> key) {
+    _latestDetailKey = key;
+  }
+
+  static void unregisterDetailKey(GlobalKey<NavigatorState> key) {
+    if (identical(_latestDetailKey, key)) _latestDetailKey = null;
+  }
+
   static Future<T?> openDetail<T>(
     BuildContext context,
     WidgetBuilder builder,
@@ -202,6 +226,20 @@ class TwoPanePage extends StatefulWidget {
 
 class _TwoPanePageState extends State<TwoPanePage> {
   final GlobalKey<NavigatorState> _detailKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // MD3Music fork v43：把"当前可见的双栏详情面板"登记给全局深链入口——
+    // 车机卡片深链要用它把播放页塞进右窗格（AdaptiveNav.pushDetailGlobal）。
+    AdaptiveNav.registerDetailKey(_detailKey);
+  }
+
+  @override
+  void dispose() {
+    AdaptiveNav.unregisterDetailKey(_detailKey);
+    super.dispose();
+  }
 
   Future<void> _handlePop(bool didPop) async {
     if (didPop) return;

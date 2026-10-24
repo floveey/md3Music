@@ -59,7 +59,8 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // MD3Music fork v40：列表项点播——岛按 media id 回播。拦截成"转交
         // AudioPlaybackService → Dart 按 <来源>:<songId> 找歌再播"，避免默认实现把
         // 无 URI 的 item 塞进 ExoPlayer（播不出且污染 media3 时间线）。
-        androidx.media3.session.MediaSessionService.playFromMediaIdHook =
+        // v43：提成字段，onDestroy 按 identity 清理（静态钩子不得滞留旧实例）。
+        vivoMixPlayHook =
             androidx.media3.session.MediaSessionService.PlayFromMediaIdHook { mediaId ->
                 if (mediaId.isNullOrEmpty()) {
                     false
@@ -321,8 +322,15 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         return result
     }
 
+    /** v43：点播钩子字段（onDestroy 按 identity 清理，防静态滞留旧实例）。 */
+    private val vivoMixPlayHook: androidx.media3.session.MediaSessionService.PlayFromMediaIdHook? =
+        null
+
     override fun onDestroy() {
         AudioPlayer.setMediaSessionServiceHost(null)
+        if (androidx.media3.session.MediaSessionService.playFromMediaIdHook === vivoMixPlayHook) {
+            androidx.media3.session.MediaSessionService.playFromMediaIdHook = null
+        }
         super.onDestroy()
     }
 

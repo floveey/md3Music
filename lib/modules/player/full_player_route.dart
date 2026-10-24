@@ -153,12 +153,9 @@ final ValueNotifier<int> playerTabIndex = ValueNotifier<int>(1);
 
 /// 播放页在场的**歌词指挥口**，卡片深链专用（v31 起以集合承载全部在场实例）。
 ///
-/// 车机模式下 `openFullPlayer` 直接短路（面板已常驻一个 dockMode 实例，
-/// 再 push 全屏路由会两套各驱动歌词/进度动画、帧率翻倍），「车机点媒体卡片
-/// 直达歌词页」不能走 push，只能把命令交给在场实例切歌词。v28e 实测后把
-/// 全屏路由实例（含拖拽覆盖层）也纳入接管：全屏路由已开着时点卡片，
-/// openFullPlayer 对存量路由只会"带回栈顶"而不切 tab——由在场实例当场
-/// 消费命令补上这一刀。
+/// v43（用户拍板二次修正）：车机点媒体卡片改走「AdaptiveNav.pushDetailGlobal
+/// 把播放页塞进双栏右窗格」，不再依赖本指挥口直达；守卫恢复但深链经
+/// bypassCarGuardOnce 旁路。指挥口保留用于"播放页已开着时原地切歌词"。
 ///
 /// v31：单指针改**注册集合**。覆盖层这类"后注册"的实例若在覆盖后注销，
 /// 单指针会以 identical 判属把整根清空，而它先注册的"存活"路由/面板实例
@@ -202,9 +199,8 @@ bool get isFullPlayerOnTop => playerExpansion.value > 0.5;
 
 /// 打开 FullPlayer（**统一防重复入栈**，新代码一律走这里）。
 ///
-/// v42（用户拍板）：车机卡片深链改为「打开播放页 + 右窗格落歌词 tab」，
-/// 不再走「先抑面板、再铺满全屏」——[force] 参数与车机忽略守卫随之退场
-/// （保留参数签名以兼容既有调用点，恒等价于默认值）。
+/// v43：恢复车机忽略守卫（防双实例双动画，v21 实测帧率翻倍+发热），深链经
+/// `bypassCarGuardOnce` 旁路一次；v42 的废弃 force 参数已删除（全仓无调用点）。
 ///
 /// 此前各调用点各自判重且口径不一：多数用 `activePlayerRoute?.isCurrent == true`
 /// ——播放页已在栈中但**非栈顶**时（用户从播放页又打开了歌单/其他页面）
@@ -223,8 +219,13 @@ bool get isFullPlayerOnTop => playerExpansion.value > 0.5;
 void openFullPlayer(
   BuildContext context, {
   PlayerMorphScene? scene,
-  @Deprecated('v42：车机铺满退场，force 恒等价默认值') bool force = false,
+  bool bypassCarGuardOnce = false,
 }) {
+  // MD3Music fork v43：恢复 v21 守卫（车机面板常驻播放器 + 全屏页 = 双实例
+  // 双动画，v21 实测帧率翻倍+发热），深链经 bypassCarGuardOnce 旁路一次——
+  // 深链优先走 AdaptiveNav.pushDetailGlobal 进双栏右窗格，旁路只是无双栏
+  // 场景（手机竖屏车机模式）的兜底。
+  if (context.read<CarModeProvider>().active && !bypassCarGuardOnce) return;
 
   // rootNavigator: true —— 桌面布局下内容区是嵌套 Navigator，若走最近的
   // Navigator 会把完整播放页 push 进中央内容区（只盖住内容区、盖不住侧栏与

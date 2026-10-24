@@ -408,19 +408,25 @@ class _AppViewState extends State<_AppView> {
       Future<void>.delayed(const Duration(milliseconds: 600)),
     ]);
     if (!mounted) return;
-    // v42（用户拍板）：车机不再"铺满全屏歌词"，与普通分支合并——打开播放页
-    // + 落歌词 tab（宽屏布局由 _syncTabLayout 按身份换算到右窗格歌词页；
-    // 窄屏落在歌词 tab）。suppressPanel/看门狗/force 一族随之退场。
-    debugPrint('[CardLyric] open: carMode.active=${carMode.active}');
+    // v43（用户拍板二次修正）：车机投屏下 App 打开的是平板双栏主壳（左发现 +
+    // 右"查看详情"占位），v42 的 openFullPlayer 打错靶子。改为：优先把播放页
+    // 推进最近可见的双栏右窗格（右窗格内 playerTabIndex=2 落歌词 tab）；无
+    // 双栏（手机竖屏）才退回 openFullPlayer。车机忽略守卫已在 full_player_route
+    // 恢复（防双实例），深链经 bypass 旁路一次。
+    debugPrint('[CardLyricLink] dart open: carMode.active=${carMode.active}');
+    final detailUsed = AdaptiveNav.pushDetailGlobal((_) => const FullPlayer());
+    if (detailUsed) {
+      debugPrint('[CardLyricLink] pushed FullPlayer into detail pane');
+      return;
+    }
     final navContext = appNavigatorKey.currentContext;
     if (navContext == null) {
       // 根导航器尚未附着（冷启动）：本次直达取消，避免打开无效路由。
       return;
     }
     playerTabIndex.value = 2;
-    // 已开着的全屏路由 → 原地切歌词即可；新路由经 initialIndex 落歌词。
     sendDockPlayerLyricsCommand();
-    openFullPlayer(navContext);
+    openFullPlayer(navContext, bypassCarGuardOnce: true);
   }
 
   // v42（用户拍板）：车机深链改为"打开播放页 + 右窗格歌词"后，

@@ -143,6 +143,8 @@ class MediaNotificationService {
           // MD3Music fork v30：回调未装配（首帧前送达）时不清 pending——
           // 由 _AppView postFrame 的消费兜底接住；装配后才投递并清零。
           // 否则车机冷启动的点击会被静默丢弃（v29 的"投递即清"过激）。
+          debugPrint('[CardLyricLink] Dart case openCardLyricView, '
+              'handlerMounted=${onOpenCardLyric != null}');
           if (onOpenCardLyric != null) {
             onOpenCardLyric!();
             // v33：显式 dynamic——catchError 的返回形态与 Future<dynamic?>

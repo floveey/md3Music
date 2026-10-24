@@ -255,16 +255,29 @@ class MainActivity : FlutterActivity() {
      * 歌词（同义"正在外投"，视为合理语义）；不满足则维持手机旧行为。
      */
     private fun maybeHandleOpenLyricIntent(intent: Intent?) {
+        // v42 诊断：深链链路此前零日志，车机实测无法定位断点——三处日志
+        // （收到 extra / 投屏判据 / 派发结果）一次点按即可钉死断点在哪一层。
+        if (intent?.getBooleanExtra("md3_open_lyric_fullscreen", false) == true) {
+            Log.i("CardLyricLink", "received md3_open_lyric_fullscreen extra")
+        }
         if (intent?.getBooleanExtra("md3_open_lyric_fullscreen", false) != true) return
         val dm = getSystemService(DisplayManager::class.java) ?: return
         val projected = dm.displays.any { it.displayId != Display.DEFAULT_DISPLAY }
+        Log.i("CardLyricLink", "projected=$projected → pending=${projected}")
         if (!projected) return
         pendingOpenCardLyric = true
         dispatchOpenCardLyric()
     }
 
     private fun dispatchOpenCardLyric() {
-        val engine = FlutterEngineCache.getInstance().get("md3music_engine") ?: return
+        // v42 诊断：引擎未缓存时原实现直接 return（静默丢）——记日志后仍返回，
+        // pending 留给 Dart postFrame 消费兜底。
+        val engine = FlutterEngineCache.getInstance().get("md3music_engine")
+            ?: run {
+                Log.i("CardLyricLink", "dispatch: no cached engine, keep pending")
+                return
+            }
+        Log.i("CardLyricLink", "dispatch engine=true pending=$pendingOpenCardLyric")
         try {
             MethodChannel(engine.dartExecutor.binaryMessenger, FLOATING_CHANNEL)
                 .invokeMethod("openCardLyricView", null)

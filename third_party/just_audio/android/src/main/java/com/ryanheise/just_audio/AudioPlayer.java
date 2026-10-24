@@ -1581,9 +1581,48 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             p.applySessionMetadata(
                     expectedMediaId, generation, title, artist, art, artUri);
         } else {
-            Log.w("AudioFocusFork", "updateActiveSessionMetadata: no active AudioPlayer");
+            // v42（元数据先行）：播放器未就绪——暂存为 pending，play() 时回放。
+            Log.w("AudioFocusFork", "updateActiveSessionMetadata: no active AudioPlayer, pending");
+            sPendingMetadata = new PendingMetadata(
+                    expectedMediaId, generation, title, artist, art, artUri);
         }
         mirrorSessionMetadata(expectedMediaId, generation, title, artist, art, artUri);
+    }
+
+    /** v42：早到元数据的暂存快照（单份，后到覆盖先到——恢复链只关心最新一份）。 */
+    private static volatile PendingMetadata sPendingMetadata;
+
+    private static final class PendingMetadata {
+        final String expectedMediaId;
+        final long generation;
+        final String title;
+        final String artist;
+        final Bitmap art;
+        final String artUri;
+
+        PendingMetadata(String expectedMediaId, long generation, String title,
+                String artist, Bitmap art, String artUri) {
+            this.expectedMediaId = expectedMediaId;
+            this.generation = generation;
+            this.title = title;
+            this.artist = artist;
+            this.art = art;
+            this.artUri = artUri;
+        }
+    }
+
+    /** v42：活跃播放器就位时回放 pending 元数据（一次即清，防止陈旧覆盖后续推送）。 */
+    private void applyPendingSessionMetadataIfAny() {
+        PendingMetadata pending = sPendingMetadata;
+        if (pending == null) return;
+        sPendingMetadata = null;
+        Log.i("AudioFocusFork", "applying pending session metadata: " + pending.title);
+        try {
+            applySessionMetadata(pending.expectedMediaId, pending.generation,
+                    pending.title, pending.artist, pending.art, pending.artUri);
+        } catch (Throwable t) {
+            Log.w("AudioFocusFork", "apply pending metadata failed: " + t);
+        }
     }
 
     /// 仅更新媒体3会话稳定标题/艺术家（不重压缩封面）。
@@ -1593,7 +1632,14 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         if (p != null) {
             p.applySessionTitleArtist(expectedMediaId, generation, title, artist);
         } else {
-            Log.w("AudioFocusFork", "updateActiveSessionTitleArtist: no active AudioPlayer");
+            // v42：标题/歌手早到同样暂存（与封面 pending 合并成一份完整快照时
+            // 以先到字段为底、后到覆盖同名字段；简化实现：仅当无 pending 时存
+            // 轻量版，完整版 updateActiveSessionMetadata 到达即覆盖）。
+            Log.w("AudioFocusFork", "updateActiveSessionTitleArtist: no active AudioPlayer, pending-lite");
+            if (sPendingMetadata == null) {
+                sPendingMetadata = new PendingMetadata(
+                        expectedMediaId, generation, title, artist, null, null);
+            }
         }
         mirrorSessionTitleArtist(expectedMediaId, generation, title, artist);
     }
@@ -2350,6 +2396,11 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         // 使封面/歌词/自定义按钮注入（updateActiveSessionMetadata 等）落到真正播放的会话，
         // 避免多播放器并存时 sActivePlayer 指向占位/最后一个创建的播放器。
         sActivePlayer = this;
+        // MD3Music fork v42（元数据先行）：连车唤醒等冷恢复场景，Dart 恢复早期推的
+        // 元数据先于播放器实例到达（updateActiveSessionMetadata no active AudioPlayer
+        // ×3 实锤），被丢后岛在窗口期弹"无信息卡片"。此处回放 pending 快照，
+        // 保证会话激活前元数据已就位——岛弹卡即有歌名/封面。
+        applyPendingSessionMetadataIfAny();
         // MD3Music fork：跨fade 角色互换时本播放器的会话可能已被 syncSingleSessionToHost
         // release（从系统注销），play 时若已释放则重建，保证系统始终有当前活跃播放器的会话。
         if (createMediaSession && mediaSession == null) {

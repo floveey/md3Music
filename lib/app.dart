@@ -390,21 +390,14 @@ class _AppViewState extends State<_AppView> {
   /// 窄屏页身份的歌词下标是 2，宽屏由 _syncTabLayout 按页身份自动换算，不用管
   /// 横竖屏差异；歌的播放状态保持不变（只是看词，不会顺手开始播放）。
   ///
-  /// MD3Music fork v29/v30：车机点卡片＝**临时铺满全屏歌词**。真机复测明确：
-  /// 用户要"点卡片进去就是歌词全屏页面"，面板内切歌词 tab 只是半屏形态。
-  /// 做法：先临时抑制面板（卸载面板常驻播放器，守卫防的双实例双动画随之
-  /// 消失——同一时刻只有一个播放器实例驱动动画），再 force push 全屏路由。
-  /// 回退不依赖逐帧动画值（系统减弱动画是单帧硬写、秒关可能全程 0），
-  /// 用逐帧看门狗统一放回条件：**无全屏路由在场且 expansion 归零**即
-  /// 释放面板抑制（打开失败/秒关/减弱动画收起一网打尽），面板自动挂回。
-  bool _cardLyricsPanelSuppressed = false;
-  CarModeProvider? _cardLyricsCarMode;
-
+  /// MD3Music fork v42（用户拍板）：车机点卡片＝打开播放页 + 落歌词 tab
+  /// （宽屏布局的右窗格即歌词页）。v29/v30 的"临时铺满全屏 + 面板抑制 +
+  /// 看门狗回退"一族已整体退场。
   Future<void> _openFullPlayerOnLyrics() async {
     // v34：首行守卫必须先于 context.read——冷启动消费路径经
     // consumePendingOpenCardLyric().then(_openFullPlayerOnLyrics)，旧 State 的
-    // 闭包在 dispose 后仍可能在途执行（引擎复用重建窗口），无守卫会在
-    // deactivated ancestor 上抛非受检异常并吞掉本代次深链。
+    // 闭包在 dispose 后仍可能在途执行（引擎复用重建窗口），无守卫会
+    // 在 deactivated ancestor 上抛非受检异常并吞掉本代次深链。
     if (!mounted) return;
     final carMode = context.read<CarModeProvider>();
     await carMode.ready;
@@ -415,68 +408,24 @@ class _AppViewState extends State<_AppView> {
       Future<void>.delayed(const Duration(milliseconds: 600)),
     ]);
     if (!mounted) return;
-    if (carMode.active) {
-      _suppressPanelForCardLyrics(carMode);
-      final navContext = appNavigatorKey.currentContext;
-      if (navContext == null) {
-        // 根导航器尚未附着：本次直达取消，面板立即放回，不丢抑制计数。
-        _releasePanelForCardLyrics();
-        return;
-      }
-      playerTabIndex.value = 2;
-      // 已开着的全屏路由（此前经本入口铺满）→ 原地切歌词即可；
-      // 面板实例已在抑制中卸载，命令口的接管者只剩路由实例。
-      sendDockPlayerLyricsCommand();
-      openFullPlayer(navContext, force: true);
-      return;
-    }
+    // v42（用户拍板）：车机不再"铺满全屏歌词"，与普通分支合并——打开播放页
+    // + 落歌词 tab（宽屏布局由 _syncTabLayout 按身份换算到右窗格歌词页；
+    // 窄屏落在歌词 tab）。suppressPanel/看门狗/force 一族随之退场。
+    debugPrint('[CardLyric] open: carMode.active=${carMode.active}');
     final navContext = appNavigatorKey.currentContext;
     if (navContext == null) {
-      // 根导航器尚未附着（极冷启动）：本次直达取消，避免打开无效路径。
+      // 根导航器尚未附着（冷启动）：本次直达取消，避免打开无效路由。
       return;
     }
     playerTabIndex.value = 2;
-    // MD3Music fork v28e：全屏路由已开着时 openFullPlayer 对存量路由只能
-    // "带回栈顶"，不会切 tab——先发命令让在场实例（含存量路由与拖拽覆盖层）
-    // 当场切歌词，再照常 push/popUntil，三种形态都落在歌词页。
+    // 已开着的全屏路由 → 原地切歌词即可；新路由经 initialIndex 落歌词。
     sendDockPlayerLyricsCommand();
     openFullPlayer(navContext);
   }
 
-  /// 车机卡片深链的面板让位：抑制计数幂等（双击不叠加）；回退靠看门狗。
-  void _suppressPanelForCardLyrics(CarModeProvider carMode) {
-    _cardLyricsCarMode ??= carMode;
-    if (_cardLyricsPanelSuppressed) return;
-    carMode.suppressPanel();
-    _cardLyricsPanelSuppressed = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _watchPanelReturn());
-  }
-
-  /// 看门狗：每帧复查。路由销毁会把 [activePlayerRoute] 置空并把
-  /// [playerExpansion] 归零（full_player_route dispose 499-512），两个条件
-  /// 同时满足即"全屏歌词页已经关了"（或压根没开成）→ 释放面板抑制。
-  /// 系统减弱动画（收起 1.0→0 单帧硬写、甚至无写入）、点开 50ms 内被返回
-  /// 等边缘都会在这里落回，而不是依赖装填锁膨胀值。
-  void _watchPanelReturn() {
-    if (!_cardLyricsPanelSuppressed) return;
-    final routeClosed = activePlayerRoute == null && playerExpansion.value <= 0.0;
-    if (routeClosed) {
-      _releasePanelForCardLyrics();
-      return;
-    }
-    if (!mounted) {
-      _releasePanelForCardLyrics();
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _watchPanelReturn());
-  }
-
-  void _releasePanelForCardLyrics() {
-    if (!_cardLyricsPanelSuppressed) return;
-    _cardLyricsCarMode?.releasePanel();
-    _cardLyricsCarMode = null;
-    _cardLyricsPanelSuppressed = false;
-  }
+  // v42（用户拍板）：车机深链改为"打开播放页 + 右窗格歌词"后，
+  // v29/v30 的面板抑制/看门狗/force 一族（_suppressPanelForCardLyrics、
+  // _watchPanelReturn、_releasePanelForCardLyrics 及两个字段）整体退场。
 
   /// 根据 ShortcutConfigProvider 当前配置，整体替换 Android 桌面快捷方式列表。
   /// type 统一为 `action_open_<tabId>`，由 main.dart handleShortcut 路由到对应页。
@@ -714,9 +663,6 @@ class _AppViewState extends State<_AppView> {
 
   @override
   void dispose() {
-    // 卡片深链的面板让位兜底：根 State 销毁仍持抑制计数还欠着放回——
-    // release 成对止损（计数器随 Provider 生命周期存续，防泄漏）。
-    _releasePanelForCardLyrics();
     // v32：命令回调一并摘除——旧 State 的闭包引用已销毁 context，若引擎
     // 复用重建后首帧前的深链恰好到达，会读到失效 context；置空后这类深链
     // 不清 pending，由重建后的 _AppView postFrame 消费兜底补开。

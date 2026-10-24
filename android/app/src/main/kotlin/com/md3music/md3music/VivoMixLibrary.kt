@@ -46,6 +46,7 @@ object VivoMixLibrary {
 
     /** 一条列表项。songId 为 Dart 侧 Song.id（稳定寻址键）。 */
     data class Item(
+        val source: String,
         val songId: String,
         val title: String,
         val artist: String,
@@ -53,9 +54,7 @@ object VivoMixLibrary {
         val artworkUri: String?,
         val durationMs: Long,
     ) {
-        val mediaId: String get() = "$sourcePrefix:$songId"
-
-        val sourcePrefix: String get() = mediaId.substringBefore(':')
+        val mediaId: String get() = "$source:$songId"
     }
 
     /** 三棵树的不可变快照（整体替换）。 */
@@ -112,7 +111,7 @@ object VivoMixLibrary {
         if (from >= items.size) return listOf(emptyItem())
         val to = minOf(from + PAGE_SIZE, items.size.toLong()).toInt()
         val hasMore = to < items.size
-        val out = ArrayList<MediaBrowserCompat.MediaItem>(to - from)
+        val out = ArrayList<MediaBrowserCompat.MediaItem>()
         for (i in from.toInt() until to) {
             val item = items[i]
             val extras = Bundle().apply {

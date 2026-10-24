@@ -171,6 +171,7 @@ class AudioPlaybackService : Service() {
                     val songId = m["id"]?.toString().orEmpty().ifEmpty { "$title|$artist" }
                     out.add(
                         VivoMixLibrary.Item(
+                            source = source,
                             songId = songId,
                             title = title,
                             artist = artist,

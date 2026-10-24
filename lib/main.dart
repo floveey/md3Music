@@ -174,6 +174,9 @@ Future<(bool, bool, bool)> runBootstrap() async {
     // 必须在 runApp 前：迷你条上滑展开时跟手覆盖层是当场新建的播放页，
     // 其封面连贯资格在第一帧就要读到真值，等不及各播放页自己的异步读取。
     _restoreSpectrumCoverPref(),
+    // 回填歌曲弹幕四镜像（开关/速度/颜色/只看）：宿主直读镜像，
+    // 不回填则重启后设置静默回退默认值。
+    _restoreSongDanmakuPref(),
   ]);
   markStartup('local_preferences_ready');
 
@@ -404,6 +407,23 @@ Future<void> _restoreSpectrumCoverPref() async {
     await Future.wait([
       settings.getSpectrumEnabled(),
       settings.getSpectrumStyle(),
+    ]);
+  } catch (_) {}
+}
+
+/// 回填歌曲弹幕四镜像（开关 / 速度 / 颜色 / 只看弹幕）。
+/// 播放页宿主与设置页都直读静态镜像，进程重启后镜像停在默认值——四个 getter
+/// 除设置页初始化外无人调用，持久化成了只写不读（v47 独立审查发现），重启后
+/// 设置静默回退。getter 读盘即回填镜像（同 getLyricTimeOffset 口径），返回值
+/// 不需要。
+Future<void> _restoreSongDanmakuPref() async {
+  try {
+    final settings = SettingsRepository();
+    await Future.wait([
+      settings.getSongDanmakuEnabled(),
+      settings.getSongDanmakuSpeed(),
+      settings.getSongDanmakuColor(),
+      settings.getSongDanmakuReadOnly(),
     ]);
   } catch (_) {}
 }

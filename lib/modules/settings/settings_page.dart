@@ -4796,7 +4796,10 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                         max: 2.0,
                         divisions: 15,
                         label: '×${speed.toStringAsFixed(2)}',
+                        // 拖动只刷内存镜像（宿主即时生效），松手才落盘（本仓滑条惯例）。
                         onChanged: (v) =>
+                            SettingsRepository.songDanmakuSpeed.value = v,
+                        onChangeEnd: (v) =>
                             _settingsRepository.setSongDanmakuSpeed(v),
                       ),
                     ),

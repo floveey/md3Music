@@ -106,13 +106,13 @@ import java.util.concurrent.TimeoutException;
 
   private static final String TAG = "LegacyConversions";
 
-  // MD3Music fork v40：原子随身听能力位（单一来源收敛）。
-  // 31（播控/信息/图/歌词/进度）+ 列表入口与三类列表位。位表有两套反编译口径
-  // （MusicCardProtocol/LastWave：256|512|1024=三类列表；7tattoo：64=列表入口），
-  // v38 全位探针实测岛取列表成立后，此处保留两口径的并集 1887 = 31|64|256|512|1024；
-  // 待真机二分收敛最小位集后回填。不再随歌词有无增删（能力位描述 App 能力）。
+  // MD3Music fork v45：原子随身听能力位（单一来源收敛）。
+  // 31（播控/信息/图/歌词/进度）+ 收藏 64 + 循环 128 + 三类列表 256|512|1024
+  // = 2015，每一位都有对应实现（v45 起循环/收藏已接通）。不再随歌词有无增删。
+  // 与 legacy MediaSessionCompat.VMM_SUPPORT_EVENT_VALUE 同值（两包私有互不可
+  // 见，改值必须同步）。
   static final String VMM_SUPPORT_EVENT_KEY = "vivomusicmix.media.metadata.support_event";
-  static final long VMM_SUPPORT_EVENT_VALUE = 1887L;
+  static final long VMM_SUPPORT_EVENT_VALUE = 2015L;
 
   private static boolean isVivoFamily() {
     return "vivo".equalsIgnoreCase(Build.MANUFACTURER)

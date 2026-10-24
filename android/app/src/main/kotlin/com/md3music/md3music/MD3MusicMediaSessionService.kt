@@ -247,6 +247,21 @@ class MD3MusicMediaSessionService : MediaSessionService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // MD3Music fork v45：原子随身听循环模式——岛若以 service intent 直发
+        // PLAY_MODE（部分 ROM 路径），这里转发 APS（正常路径走 media3
+        // onCustomCommand，已在 AudioPlayer 侧拦截）。
+        if (intent?.action == AudioPlayer.VMM_ACTION_PLAY_MODE) {
+            val mode = intent.getIntExtra(AudioPlayer.VMM_KEY_LOOP_MODE, 1)
+            val forward = Intent(this, AudioPlaybackService::class.java)
+                .setAction(AudioPlaybackService.ACTION_VIVO_MIX_PLAY_MODE)
+                .putExtra(AudioPlaybackService.EXTRA_VIVO_MIX_PLAY_MODE, mode)
+            try {
+                startService(forward)
+            } catch (t: Throwable) {
+                Log.w("CarAutoResume", "vivo mix play-mode forward failed", t)
+            }
+            return START_NOT_STICKY
+        }
         // MD3Music fork v34：vendored MediaSessionService.onStartCommand 死分支的
         // FGS 5 秒死线兜底。通知栏"播放"按钮（未播放态）经 PendingIntent.
         // getForegroundService 拉起本服务，系统强制 5 秒内 startForeground；恰逢

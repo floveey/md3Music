@@ -52,6 +52,7 @@ class VivoMixSync {
     favorites.addListener(_schedule);
     library.addListener(_schedule);
     MediaNotificationService.onVivoMixPlay = _handleVivoMixPlay;
+    MediaNotificationService.onVivoMixPlayMode = _handleVivoMixPlayMode;
     // 本地库默认懒加载（只有进"本地音乐"页才读）——主动补一次缓存读取，
     // 让"下载列表"树在冷启动后也有内容。
     unawaited(library.loadSavedSongs());
@@ -68,6 +69,9 @@ class VivoMixSync {
     _library = null;
     if (MediaNotificationService.onVivoMixPlay == _handleVivoMixPlay) {
       MediaNotificationService.onVivoMixPlay = null;
+    }
+    if (MediaNotificationService.onVivoMixPlayMode == _handleVivoMixPlayMode) {
+      MediaNotificationService.onVivoMixPlayMode = null;
     }
   }
 
@@ -158,5 +162,22 @@ class VivoMixSync {
     }
     if (song == null) return;
     await player.playSong(song);
+  }
+
+  /// v45：岛循环模式切换（1=列表 / 2=单曲 / 3=随机）→ setLoopMode/setShuffle。
+  Future<void> _handleVivoMixPlayMode(int mode) async {
+    final player = _player;
+    if (player == null) return;
+    switch (mode) {
+      case 3:
+        await player.setLoopMode(AppLoopMode.all);
+        await player.setShuffle(true);
+      case 2:
+        await player.setShuffle(false);
+        await player.setLoopMode(AppLoopMode.one);
+      default:
+        await player.setShuffle(false);
+        await player.setLoopMode(AppLoopMode.all);
+    }
   }
 }

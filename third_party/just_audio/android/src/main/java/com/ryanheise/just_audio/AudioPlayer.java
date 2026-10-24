@@ -1311,7 +1311,28 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                             listener.onToggleDesktopLyric();
                         } else if (CMD_TOGGLE_FAVORITE.customAction.equals(action)) {
                             listener.onToggleFavorite();
+                        } else if (VMM_ACTION_PLAY_MODE.equals(action)) {
+                            // MD3Music fork v45：原子随身听循环模式切换。
+                            int mode = args != null
+                                    ? args.getInt(VMM_KEY_LOOP_MODE, 1) : 1;
+                            listener.onPlayMode(mode);
                         }
+                    }
+                    return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
+                }
+
+                // MD3Music fork v45：原子随身听心形收藏——岛经 setRating 发
+                // HeartRating，转发 App 自有收藏切换（此前未覆写 → 岛报
+                // ERROR_NOT_SUPPORTED，心形点击无反应）。
+                @Override
+                public ListenableFuture<SessionResult> onSetRating(
+                        MediaSession session, MediaSession.ControllerInfo controller,
+                        String mediaId, androidx.media3.common.Rating rating) {
+                    final CustomActionListener listener = sCustomActionListener;
+                    if (listener != null
+                            && rating instanceof androidx.media3.common.Rating.HeartRating
+                            && ((androidx.media3.common.Rating.HeartRating) rating).isHeart()) {
+                        listener.onToggleFavorite();
                     }
                     return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
                 }
@@ -1883,10 +1904,13 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     public interface CustomActionListener {
         void onToggleDesktopLyric();
         void onToggleFavorite();
-        // MD3Music fork（阶段6·修复媒体卡片上一首/下一首）：
+        // MD3Music fork（阶段·修复媒体卡片上一首/下一首）：
         // 原生 PREVIOUS/NEXT 命令拦截后回调，走 App 自有切歌逻辑。
         void onPrevious();
         void onNext();
+        // MD3Music fork v45：vivo 原子随身听循环模式按钮——岛发
+        // vivomusicmix.media.action.PLAY_MODE（extras 带目标 LOOP_MODE 1/2/3）。
+        void onPlayMode(int loopMode);
         void onPause();
     }
 
@@ -1949,6 +1973,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             new SessionCommand(
                     "io.github.andrealtb.lockscreenlyrics.action.TOGGLE_TRANSLATION",
                     new android.os.Bundle());
+    // MD3Music fork v45：vivo 原子随身听循环模式——岛经 media3 自定义命令发
+    // PLAY_MODE（extras 带目标 LOOP_MODE 1=列表/2=单曲/3=随机）。
+    public static final String VMM_ACTION_PLAY_MODE = "vivomusicmix.media.action.PLAY_MODE";
+    public static final String VMM_KEY_LOOP_MODE = "vivomusicmix.media.metadata.LOOP_MODE";
 
     /// 由 App 注册，接收媒体3通知按钮触发的自定义命令。
     public static void setCustomActionListener(CustomActionListener listener) {
@@ -2214,6 +2242,17 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             MediaItem updated = cur.buildUpon().setMediaMetadata(mb.build()).build();
             // 官方推荐：同 uri 替换 → 只更新 metadata，不打断播放
             player.replaceMediaItem(index, updated);
+            // MD3Music fork v45：原子随身听循环模式回写（extras → LegacyConversions
+            // 拷为 framework 顶层键，岛据此渲染循环按钮状态：1=列表/2=单曲/3=随机）。
+            androidx.media3.common.MediaMetadata withLoop =
+                    updated.mediaMetadata.buildUpon()
+                        .setExtras(new android.os.Bundle() {{
+                            putInt(VMM_KEY_LOOP_MODE,
+                                    player.getShuffleModeEnabled() ? 3
+                                    : player.getRepeatMode() == androidx.media3.common.Player.REPEAT_MODE_ONE ? 2 : 1);
+                        }}.clone())
+                        .build();
+            player.replaceMediaItem(index, updated.buildUpon().setMediaMetadata(withLoop).build());
             Log.d("AudioFocusFork", "applySessionMetadata OK title=" + title + " art=" + (art != null)
                     + " onMainThread=" + (Thread.currentThread() == Looper.getMainLooper().getThread()));
         } catch (Exception e) {

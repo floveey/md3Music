@@ -112,6 +112,9 @@ class AudioPlaybackService : Service() {
         // MD3Music fork v40：原子随身听列表项点播（MSS 的 playFromMediaId 钩子转发进来）
         const val ACTION_VIVO_MIX_PLAY = "com.md3music.md3music.ACTION_VIVO_MIX_PLAY"
         const val EXTRA_VIVO_MIX_MEDIA_ID = "vivoMixMediaId"
+        // MD3Music fork v45：原子随身听循环模式切换（MSS PLAY_MODE intent 转发进来）
+        const val ACTION_VIVO_MIX_PLAY_MODE = "com.md3music.md3music.ACTION_VIVO_MIX_PLAY_MODE"
+        const val EXTRA_VIVO_MIX_PLAY_MODE = "vivoMixPlayMode"
 
         private const val TAG = "AudioPlaybackService"
 
@@ -1221,6 +1224,10 @@ class AudioPlaybackService : Service() {
             AudioPlayer.setCustomActionListener(object : AudioPlayer.CustomActionListener {
                 override fun onToggleDesktopLyric() { handleAction(ACTION_TOGGLE_DESKTOP_LYRIC) }
                 override fun onToggleFavorite() { handleAction(ACTION_TOGGLE_FAVORITE) }
+                // MD3Music fork v45：原子随身听循环模式切换（岛 PLAY_MODE 命令）。
+                override fun onPlayMode(mode: Int) { dispatchVivoMixPlayMode(mode) }
+                override fun onPrevious() { handleMediaButtonCommand("previous") }
+                override fun onNext() { handleMediaButtonCommand("next") }
                 // MediaNotificationService 的切歌命令需要带 commandId 确认；复用媒体键队列
                 // 派发，避免直接 invokeMethod 时因缺少 commandId 被 Dart 端拒绝。
                 override fun onPrevious() { handleMediaButtonCommand("previous") }
@@ -1315,6 +1322,12 @@ class AudioPlaybackService : Service() {
             // 线控重放，不能走 ACTION_MEDIA_BUTTON 链）。
             ACTION_VIVO_MIX_PLAY -> {
                 dispatchVivoMixPlay(intent?.getStringExtra(EXTRA_VIVO_MIX_MEDIA_ID))
+                return START_NOT_STICKY
+            }
+            // MD3Music fork v45：原子随身听循环模式切换（MSS PLAY_MODE intent 转发）。
+            ACTION_VIVO_MIX_PLAY_MODE -> {
+                dispatchVivoMixPlayMode(
+                    intent?.getIntExtra(EXTRA_VIVO_MIX_PLAY_MODE, 1) ?: 1)
                 return START_NOT_STICKY
             }
             ACTION_MEDIA_BUTTON -> {
@@ -1494,6 +1507,22 @@ class AudioPlaybackService : Service() {
         }
         MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
             .invokeMethod("vivoMixPlay", mapOf("mediaId" to mediaId))
+    }
+
+    /// MD3Music fork v45：原子随身听循环模式切换——转发 Dart
+    /// （mode 1=列表 / 2=单曲 / 3=随机；Dart 侧 setLoopMode/setShuffle）。
+    private fun dispatchVivoMixPlayMode(mode: Int) {
+        val engine = flutterEngine ?: staticFlutterEngine
+        if (engine == null) {
+            Log.i(TAG, "vivo mix play-mode dropped (no engine): $mode")
+            return
+        }
+        runOnMainThread {
+            MethodChannel(
+                engine.dartExecutor.binaryMessenger,
+                "com.md3music.md3music/floating_lyric",
+            ).invokeMethod("vivoMixPlayMode", mapOf("mode" to mode))
+        }
     }
 
     /// 解决方案B阶段5：前台服务保活通知。

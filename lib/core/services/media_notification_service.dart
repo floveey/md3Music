@@ -161,6 +161,12 @@ class MediaNotificationService {
           final mediaId = args?['mediaId'] as String?;
           if (mediaId != null && mediaId.isNotEmpty) onVivoMixPlay?.call(mediaId);
           break;
+        // MD3Music fork v45：原子随身听循环模式切换（mode 1=列表/2=单曲/3=随机）。
+        case 'vivoMixPlayMode':
+          final args = call.arguments as Map<dynamic, dynamic>?;
+          final mode = args?['mode'] as int?;
+          if (mode != null) onVivoMixPlayMode?.call(mode);
+          break;
         case 'toggleDesktopLyric':
           onToggleDesktopLyric?.call();
           break;
@@ -290,6 +296,9 @@ class MediaNotificationService {
 
   /// MD3Music fork v40：原子随身听列表项点播回调（media id = `<来源>:<songId>`）。
   static void Function(String mediaId)? onVivoMixPlay;
+
+  /// MD3Music fork v45：原子随身听循环模式切换回调（mode 1=列表/2=单曲/3=随机）。
+  static void Function(int mode)? onVivoMixPlayMode;
 
   // 桌面歌词（悬浮窗）相关
   static Future<bool> hasOverlayPermission() async {

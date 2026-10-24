@@ -345,11 +345,11 @@ public class MediaSessionCompat {
   static final String UCAR_LYRICS_WHOLE = "ucar.media.metadata.LYRICS_WHOLE";
   static final String UCAR_LYRICS_STATUS = "ucar.media.metadata.LYRICS_STATUS";
   // vivomusicmix 原子随身听能力位。字段名照抄 vivo 拼写。
-  // v40：与 LegacyConversions.VMM_SUPPORT_EVENT_VALUE 同值（两包私有互不可见，
-  // 改值必须同步）——31 + 列表位两口径并集 64|256|512|1024（探针 2015 已移除，
-  // 128/循环未实现不声明）；待真机二分收敛最小位集后回填；不随歌词有无增删。
+  // v45：与 LegacyConversions.VMM_SUPPORT_EVENT_VALUE 同值（两包私有互不可见，
+  // 改值必须同步）——31 + 收藏 64 + 循环 128 + 三类列表 256|512|1024 = 2015，
+  // 每一位都有对应实现（v45 起循环/收藏已接通）；不随歌词有无增删。
   static final String VMM_SUPPORT_EVENT = "vivomusicmix.media.metadata.support_event";
-  static final long VMM_SUPPORT_EVENT_VALUE = 1887L;
+  static final long VMM_SUPPORT_EVENT_VALUE = 2015L;
   static final String VMM_ACTION_KEY = "vivomusicmix.meida.extra.key.action";
   static final String VMM_MEDIA_ID_KEY = "vivomusicmix.extra.key.meidia_id";
   static final String VMM_LYRIC_KEY = "vivomusicmix.extra.key.lyric";

@@ -119,28 +119,42 @@ class VivoMixSync {
         'durationMs': song.duration.inMilliseconds,
       };
 
-  /// 岛端点播：media id = `<来源>:<songId>`。按来源找 Song 后交
-  /// PlayerProvider 播放（稳定寻址，不受队列位移影响；找不到则放弃——
-  /// 快照未覆盖的条目宁可无响应也不模糊匹配错歌）。
+  /// 岛端点播：media id 两种口径——`<来源>:<songId>`（收藏/本地树）或
+  /// `title|artist`（当前播放树，v41 起与岛高亮匹配口径一致）。按来源找 Song
+  /// 后交 PlayerProvider 播放；找不到则放弃（快照未覆盖的条目宁可无响应也不
+  /// 模糊匹配错歌）。
   Future<void> _handleVivoMixPlay(String mediaId) async {
     final player = _player;
     final favorites = _favorites;
     final library = _library;
     if (player == null || favorites == null || library == null) return;
 
-    final sep = mediaId.indexOf(':');
-    if (sep <= 0 || sep + 1 >= mediaId.length) return;
-    final source = mediaId.substring(0, sep);
-    final songId = mediaId.substring(sep + 1);
-
     Song? song;
-    switch (source) {
-      case 'queue':
-        song = player.playlist.where((s) => s.id == songId).firstOrNull;
-      case 'fav':
-        song = favorites.favorites.where((s) => s.id == songId).firstOrNull;
-      case 'local':
-        song = library.allSongs.where((s) => s.id == songId).firstOrNull;
+    final sep = mediaId.indexOf(':');
+    final hasKnownPrefix = sep > 0 &&
+        (mediaId.startsWith('queue:') ||
+            mediaId.startsWith('fav:') ||
+            mediaId.startsWith('local:'));
+    if (hasKnownPrefix) {
+      final source = mediaId.substring(0, sep);
+      final songId = mediaId.substring(sep + 1);
+      switch (source) {
+        case 'queue':
+          song = player.playlist.where((s) => s.id == songId).firstOrNull;
+        case 'fav':
+          song = favorites.favorites.where((s) => s.id == songId).firstOrNull;
+        case 'local':
+          song = library.allSongs.where((s) => s.id == songId).firstOrNull;
+      }
+    } else {
+      // `title|artist` 口径：与岛识别"正在播放"的身份一致。
+      final pipe = mediaId.indexOf('|');
+      if (pipe <= 0 || pipe + 1 >= mediaId.length) return;
+      final title = mediaId.substring(0, pipe);
+      final artist = mediaId.substring(pipe + 1);
+      song = player.playlist
+          .where((s) => s.displayName == title && s.artist == artist)
+          .firstOrNull;
     }
     if (song == null) return;
     await player.playSong(song);

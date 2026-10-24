@@ -64,9 +64,12 @@ class MD3MusicMediaSessionService : MediaSessionService() {
                 if (mediaId.isNullOrEmpty()) {
                     false
                 } else {
+                    // v41：当前播放树的 mediaId 是 `title|artist` 口径（与岛高亮
+                    // 匹配一致），不带来源前缀——含 '|' 的也一并拦截；其余按前缀。
                     val starts = mediaId.startsWith(VivoMixLibrary.SOURCE_CURRENT + ":") ||
                         mediaId.startsWith(VivoMixLibrary.SOURCE_FAVORITE + ":") ||
-                        mediaId.startsWith(VivoMixLibrary.SOURCE_LOCAL + ":")
+                        mediaId.startsWith(VivoMixLibrary.SOURCE_LOCAL + ":") ||
+                        mediaId.contains('|')
                     if (starts) {
                         val intent = Intent(this, AudioPlaybackService::class.java)
                             .setAction(AudioPlaybackService.ACTION_VIVO_MIX_PLAY)

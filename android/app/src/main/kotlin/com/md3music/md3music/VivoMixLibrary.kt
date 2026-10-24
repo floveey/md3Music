@@ -54,7 +54,14 @@ object VivoMixLibrary {
         val artworkUri: String?,
         val durationMs: Long,
     ) {
-        val mediaId: String get() = "$source:$songId"
+        /**
+         * v41：当前播放树的 mediaId 用 `title|artist` 口径——与岛识别"正在播放"的
+         * ID（hook 补进 framework MEDIA_ID 的身份，同 lrc_change meidia_id）一致，
+         * 岛靠 mediaId 相等来高亮当前项。收藏/本地树保持 `<来源>:<songId>` 稳定
+         * 寻址（它们不需要高亮）。
+         */
+        val mediaId: String get() =
+            if (source == SOURCE_CURRENT) "$title|$artist" else "$source:$songId"
     }
 
     /** 三棵树的不可变快照（整体替换）。 */
@@ -131,7 +138,11 @@ object VivoMixLibrary {
         return out
     }
 
-    /** 空列表哨兵项（extras 形状与正常项一致，防岛读空指针）。 */
+    /**
+     * 空列表哨兵项。v41：title/subtitle 必须都给文案——岛对未设置的 subtitle 会
+     * 渲染成字面 "null"（真机实测"空null"；LastWave 同结论：subtitle 不设会
+     * 显示成文本，他们对每项都 `subtitle ?: ""`）。
+     */
     private fun emptyItem(): MediaBrowserCompat.MediaItem {
         val extras = Bundle().apply {
             putBoolean(KEY_HAS_MORE, false)
@@ -139,7 +150,8 @@ object VivoMixLibrary {
         }
         val description = MediaDescriptionCompat.Builder()
             .setMediaId(EMPTY_MEDIA_ID)
-            .setTitle("")
+            .setTitle("暂无歌曲")
+            .setSubtitle("")
             .setExtras(extras)
             .build()
         return MediaBrowserCompat.MediaItem(description, 0)

@@ -323,7 +323,7 @@ class MD3MusicMediaSessionService : MediaSessionService() {
     }
 
     /** v43：点播钩子字段（onDestroy 按 identity 清理，防静态滞留旧实例）。 */
-    private val vivoMixPlayHook: androidx.media3.session.MediaSessionService.PlayFromMediaIdHook? =
+    private var vivoMixPlayHook: androidx.media3.session.MediaSessionService.PlayFromMediaIdHook? =
         null
 
     override fun onDestroy() {

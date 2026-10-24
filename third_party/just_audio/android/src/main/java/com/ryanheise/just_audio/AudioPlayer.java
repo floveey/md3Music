@@ -1323,15 +1323,16 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
 
                 // MD3Music fork v45：原子随身听心形收藏——岛经 setRating 发
                 // HeartRating，转发 App 自有收藏切换（此前未覆写 → 岛报
-                // ERROR_NOT_SUPPORTED，心形点击无反应）。
+                // ERROR_NOT_SUPPORTED，心形点击无反应）。HeartRating 是
+                // androidx.media3.common 的顶级类（非 Rating 嵌套类）。
                 @Override
                 public ListenableFuture<SessionResult> onSetRating(
                         MediaSession session, MediaSession.ControllerInfo controller,
                         String mediaId, androidx.media3.common.Rating rating) {
                     final CustomActionListener listener = sCustomActionListener;
                     if (listener != null
-                            && rating instanceof androidx.media3.common.Rating.HeartRating
-                            && ((androidx.media3.common.Rating.HeartRating) rating).isHeart()) {
+                            && rating instanceof androidx.media3.common.HeartRating
+                            && ((androidx.media3.common.HeartRating) rating).isHeart()) {
                         listener.onToggleFavorite();
                     }
                     return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
@@ -2244,13 +2245,14 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             player.replaceMediaItem(index, updated);
             // MD3Music fork v45：原子随身听循环模式回写（extras → LegacyConversions
             // 拷为 framework 顶层键，岛据此渲染循环按钮状态：1=列表/2=单曲/3=随机）。
+            // Bundle 是 final：不能用双花括号匿名子类，用局部变量装配。
+            android.os.Bundle loopExtras = new android.os.Bundle();
+            loopExtras.putInt(VMM_KEY_LOOP_MODE,
+                    player.getShuffleModeEnabled() ? 3
+                    : player.getRepeatMode() == androidx.media3.common.Player.REPEAT_MODE_ONE ? 2 : 1);
             androidx.media3.common.MediaMetadata withLoop =
                     updated.mediaMetadata.buildUpon()
-                        .setExtras(new android.os.Bundle() {{
-                            putInt(VMM_KEY_LOOP_MODE,
-                                    player.getShuffleModeEnabled() ? 3
-                                    : player.getRepeatMode() == androidx.media3.common.Player.REPEAT_MODE_ONE ? 2 : 1);
-                        }}.clone())
+                        .setExtras(loopExtras)
                         .build();
             player.replaceMediaItem(index, updated.buildUpon().setMediaMetadata(withLoop).build());
             Log.d("AudioFocusFork", "applySessionMetadata OK title=" + title + " art=" + (art != null)

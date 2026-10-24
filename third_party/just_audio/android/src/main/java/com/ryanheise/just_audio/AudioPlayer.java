@@ -2069,7 +2069,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             } else {
                 newExtras.putString(UCAR_LYRICS_WHOLE, carLrc);
                 newExtras.putLong(UCAR_LYRICS_STATUS, 0L);
-                newExtras.putLong(VMM_SUPPORT_EVENT, 31L);
+                // v38 探针：31 → 2015（全能力位，判定原子随身听"播放列表"置灰是否
+                // 由能力位闸门造成）。位集收敛后回填，并考虑与"是否有歌词"解耦
+                // （当前能力位随歌词有无一起增删，列表能力不该被歌词有无绑架）。
+                newExtras.putLong(VMM_SUPPORT_EVENT, 2015L);
             }
             MediaMetadata updated = mb.setExtras(newExtras).build();
             player.replaceMediaItem(

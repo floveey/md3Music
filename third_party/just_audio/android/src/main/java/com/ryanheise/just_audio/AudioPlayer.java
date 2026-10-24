@@ -1730,7 +1730,8 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     // 绝不写 LYRICS_LINE（单行模式信号）。
     private static final String UCAR_LYRICS_WHOLE = "ucar.media.metadata.LYRICS_WHOLE";
     private static final String UCAR_LYRICS_STATUS = "ucar.media.metadata.LYRICS_STATUS";
-    private static final String VMM_SUPPORT_EVENT = "vivomusicmix.media.metadata.support_event";
+    // v40：support_event 的写入收敛到通用转换路径（LegacyConversions /
+    // legacy MediaSessionCompat 两份常量），本类不再按歌词有无增删能力位。
 
     /**
      * 从 lyricInfo JSON 提取可用于 Vivo 车机的整段 LRC：
@@ -2065,14 +2066,12 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             if (carLrc == null || carLrc.isEmpty()) {
                 newExtras.remove(UCAR_LYRICS_WHOLE);
                 newExtras.remove(UCAR_LYRICS_STATUS);
-                newExtras.remove(VMM_SUPPORT_EVENT);
+                // MD3Music fork v40：能力位（support_event）不再随歌词有无增删——
+                // 它描述的是 App 能力而非当前曲目内容；无歌词歌随后会由通用转换
+                // 路径（LegacyConversions/MediaSessionCompat 常量）无条件补写。
             } else {
                 newExtras.putString(UCAR_LYRICS_WHOLE, carLrc);
                 newExtras.putLong(UCAR_LYRICS_STATUS, 0L);
-                // v38 探针：31 → 2015（全能力位，判定原子随身听"播放列表"置灰是否
-                // 由能力位闸门造成）。位集收敛后回填，并考虑与"是否有歌词"解耦
-                // （当前能力位随歌词有无一起增删，列表能力不该被歌词有无绑架）。
-                newExtras.putLong(VMM_SUPPORT_EVENT, 2015L);
             }
             MediaMetadata updated = mb.setExtras(newExtras).build();
             player.replaceMediaItem(

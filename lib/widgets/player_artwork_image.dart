@@ -68,29 +68,45 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
   /// kugou 图床偶现抖动/超时时 CachedNetworkImage 一次失败即定格占位，
   /// 岛/锁屏走原生链没受影响，唯独 App 内一错到底。重试用换 Key 强制
   /// 重新 resolve（failed 请求不污染缓存），二连败维持占位至切歌。
+  ///
+  /// v40（第六轮审查 P0）：守卫从 widget.artworkUri 改为 [_requestedUri]——
+  /// local:// + 在线匹配分支实际请求的是 http 匹配 URL，与 widget.artworkUri
+  /// 恒不等导致重试永不触发；另把 Future.delayed 换成可取消的 Timer。
   static const int _maxHttpAttempts = 2;
   static const Duration _httpRetryDelay = Duration(milliseconds: 1600);
   String? _attemptUri;
   int _attempt = 0;
   bool _retryScheduled = false;
+  Timer? _retryTimer;
+  String? _requestedUri;
 
   void _noteUriChanged() {
     if (widget.artworkUri != _attemptUri) {
       _attemptUri = widget.artworkUri;
       _attempt = 0;
       _retryScheduled = false;
+      _requestedUri = null;
+      _retryTimer?.cancel();
+      _retryTimer = null;
     }
   }
 
   void _scheduleHttpRetry(String uri) {
     if (_retryScheduled || _attempt >= _maxHttpAttempts - 1) return;
     _retryScheduled = true;
-    Future<void>.delayed(_httpRetryDelay, () {
+    _retryTimer = Timer(_httpRetryDelay, () {
       _retryScheduled = false;
-      if (!mounted || widget.artworkUri != uri) return;
+      if (!mounted || _requestedUri != uri) return;
       if (_attempt >= _maxHttpAttempts - 1) return;
-      if (mounted) setState(() => _attempt++);
+      setState(() => _attempt++);
     });
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    super.dispose();
   }
 
   @override
@@ -216,6 +232,7 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
       }
       // 内嵌封面缺失或偏好在线：用匹配到的在线封面
       if (hasMatchedUri) {
+        _requestedUri = matchedUri;
         return CachedNetworkImage(
           key: ValueKey('matched:$matchedUri#${_attempt}'),
           imageUrl: matchedUri,
@@ -290,6 +307,7 @@ class _PlayerArtworkImageState extends State<PlayerArtworkImage> {
 
     // http(s):// 在线封面：用 CachedNetworkImage（带磁盘缓存）
     if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      _requestedUri = uri;
       return CachedNetworkImage(
         // v37：自愈重试——失败换 Key 重新 resolve（网络失败不入缓存）
         key: ValueKey('net:$uri#${_attempt}'),

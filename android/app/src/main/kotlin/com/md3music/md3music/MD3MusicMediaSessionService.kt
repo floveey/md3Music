@@ -56,6 +56,32 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         setLegacyBrowseChildrenProvider { parentId, options ->
             VivoMixLibrary.buildChildren(parentId, options)
         }
+        // MD3Music fork v40：列表项点播——岛按 media id 回播。拦截成"转交
+        // AudioPlaybackService → Dart 按 <来源>:<songId> 找歌再播"，避免默认实现把
+        // 无 URI 的 item 塞进 ExoPlayer（播不出且污染 media3 时间线）。
+        androidx.media3.session.MediaSessionService.playFromMediaIdHook =
+            androidx.media3.session.MediaSessionService.PlayFromMediaIdHook { mediaId ->
+                if (mediaId.isNullOrEmpty()) {
+                    false
+                } else {
+                    val starts = mediaId.startsWith(VivoMixLibrary.SOURCE_CURRENT + ":") ||
+                        mediaId.startsWith(VivoMixLibrary.SOURCE_FAVORITE + ":") ||
+                        mediaId.startsWith(VivoMixLibrary.SOURCE_LOCAL + ":")
+                    if (starts) {
+                        val intent = Intent(this, AudioPlaybackService::class.java)
+                            .setAction(AudioPlaybackService.ACTION_VIVO_MIX_PLAY)
+                            .putExtra(AudioPlaybackService.EXTRA_VIVO_MIX_MEDIA_ID, mediaId)
+                        try {
+                            startService(intent)
+                        } catch (t: Throwable) {
+                            Log.w("CarAutoResume", "vivo mix play forward failed", t)
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
         // 注册为 fork 的会话 host：fork 创建/已有活跃会话后 addSession 到本服务渲染通知
         AudioPlayer.setMediaSessionServiceHost(this)
         // MD3Music fork v21（连车拉起）：读取外部绑定时自动拉起+续播的开关
@@ -173,6 +199,10 @@ class MD3MusicMediaSessionService : MediaSessionService() {
      */
     private fun maybeWakeForCarConnect(action: String?) {
         if (action == ACTION_INTERNAL_MEDIA_HOST_BIND) return
+        // MD3Music fork v40：标准 browse action = 原子随身听取列表的绑定路径，属
+        // 常规查询而非"连车"，一并排除（否则有投屏虚拟屏时岛的常驻绑定会触发
+        // 连车自动续播误判）。
+        if (action == "android.media.browse.MediaBrowserService") return
         if (action == "com.vivo.musicwidgetmix.support.service") return
         if (!autoWakeEnabled) return
         // MD3Music fork v26：标准 MediaSessionService 绑定在手机本地也会发生

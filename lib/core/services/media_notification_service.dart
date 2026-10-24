@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 为原生重试提供有界的命令去重，并且只确认实际交给回调的命令。
@@ -151,6 +152,13 @@ class MediaNotificationService {
                 .catchError((Object _) {}));
           }
           break;
+        // MD3Music fork v40：原子随身听列表项点播——岛按 media id 回播，原生经
+        // ACTION_VIVO_MIX_PLAY 转发到引擎通道。media id 口径 `<来源>:<songId>`。
+        case 'vivoMixPlay':
+          final args = call.arguments as Map<dynamic, dynamic>?;
+          final mediaId = args?['mediaId'] as String?;
+          if (mediaId != null && mediaId.isNotEmpty) onVivoMixPlay?.call(mediaId);
+          break;
         case 'toggleDesktopLyric':
           onToggleDesktopLyric?.call();
           break;
@@ -261,6 +269,7 @@ class MediaNotificationService {
   ///
   /// 岛在能力位放行后经 MediaBrowserServiceCompat 绑定来取列表；原生侧只读内存
   /// 快照，故由 Dart 主动推（不在 binder 回调里回拉，避免卡住岛的调用线程）。
+  /// v40：失败不再静默——主通道缺 case 这类问题（第六轮审查 P0）必须当场暴露。
   static Future<void> updateVivoMixLists({
     required List<Map<String, dynamic>> current,
     required List<Map<String, dynamic>> favorites,
@@ -272,8 +281,13 @@ class MediaNotificationService {
         'favorites': favorites,
         'local': local,
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[VivoMixSync] updateVivoMixLists failed: $e');
+    }
   }
+
+  /// MD3Music fork v40：原子随身听列表项点播回调（media id = `<来源>:<songId>`）。
+  static void Function(String mediaId)? onVivoMixPlay;
 
   // 桌面歌词（悬浮窗）相关
   static Future<bool> hasOverlayPermission() async {

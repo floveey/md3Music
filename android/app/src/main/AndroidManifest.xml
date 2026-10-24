@@ -128,6 +128,11 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <!-- MD3Music fork v40：标准 browse action——原子随身听取列表的绑定
+                     路径（真机实测 action=android.media.browse.MediaBrowserService）。
+                     岛若按 action+package（而非显式 component）绑定，缺此 filter 会
+                     解析不到本服务，列表树整体拿不到内容。 -->
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
             <!-- MD3Music fork v19：c0 + 全剥 bitmap + http:/480 URI（完全复刻 kgka
                  c0+无bitmap+http 的已验证配置）。v18 c0+单bitmap+httpURI 封面仍 1x1

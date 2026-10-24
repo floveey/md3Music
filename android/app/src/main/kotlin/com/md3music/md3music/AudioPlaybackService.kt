@@ -109,6 +109,9 @@ class AudioPlaybackService : Service() {
         const val EXTRA_MEDIA_COMMAND = "mediaCommand"
         /** MD3Music fork v21：唤醒来源标记——"car"=车机绑定触发（放开媒体会话创建） */
         const val EXTRA_WAKE_ORIGIN = "wakeOrigin"
+        // MD3Music fork v40：原子随身听列表项点播（MSS 的 playFromMediaId 钩子转发进来）
+        const val ACTION_VIVO_MIX_PLAY = "com.md3music.md3music.ACTION_VIVO_MIX_PLAY"
+        const val EXTRA_VIVO_MIX_MEDIA_ID = "vivoMixMediaId"
 
         private const val TAG = "AudioPlaybackService"
 
@@ -147,6 +150,47 @@ class AudioPlaybackService : Service() {
         /// 当前是否正在播放（供 LockScreenLyricReceiver 判断锁屏时是否拉起歌词界面）。
         @Volatile
         var isNowPlaying = false
+
+        /// MD3Music fork v40：解析 Dart 推来的原子随身听三棵列表快照——静态实现，
+        /// 前台主引擎通道（MainActivity）与 headless 引擎通道（本服务）共用一处。
+        /// 列表项 media id 口径 `<来源>:<songId>`（songId 为 Dart 侧 Song.id 稳定键；
+        /// 下标进 id 会随队列插删整体漂移，v39 口径已废弃）。
+        @JvmStatic
+        fun updateVivoMixLists(args: Any?) {
+            val map = args as? Map<*, *> ?: return
+            fun parse(key: String, source: String): List<VivoMixLibrary.Item> {
+                val raw = map[key] as? List<*> ?: return emptyList()
+                val out = ArrayList<VivoMixLibrary.Item>(raw.size)
+                raw.forEachIndexed { index, element ->
+                    val m = element as? Map<*, *> ?: return@forEachIndexed
+                    val title = m["title"]?.toString().orEmpty()
+                    val artist = m["artist"]?.toString().orEmpty()
+                    val album = m["album"]?.toString()
+                    val artwork = m["artworkUri"]?.toString()
+                    val duration = (m["durationMs"] as? Number)?.toLong() ?: 0L
+                    val songId = m["id"]?.toString().orEmpty().ifEmpty { "$title|$artist" }
+                    out.add(
+                        VivoMixLibrary.Item(
+                            songId = songId,
+                            title = title,
+                            artist = artist,
+                            album = album,
+                            artworkUri = artwork,
+                            durationMs = duration,
+                        )
+                    )
+                }
+                return out
+            }
+            val current = parse("current", VivoMixLibrary.SOURCE_CURRENT)
+            val favorites = parse("favorites", VivoMixLibrary.SOURCE_FAVORITE)
+            val local = parse("local", VivoMixLibrary.SOURCE_LOCAL)
+            VivoMixLibrary.replace(current, favorites, local)
+            Log.i(
+                TAG,
+                "vivo mix lists updated: current=${current.size} fav=${favorites.size} local=${local.size}"
+            )
+        }
         /// MD3Music fork（方案A·封面兜底）：前台服务启动被拒（mAllowStartForeground=false，
         /// 如后台切歌/跨fade 收敛瞬间）时由 MainActivity 直接调用注入封面，
         /// 不依赖 AudioPlaybackService 启动。处理 http(s) 在线封面，命中内存缓存免下载。
@@ -1265,6 +1309,13 @@ class AudioPlaybackService : Service() {
                 handleAction(intent)
                 return START_STICKY
             }
+            // MD3Music fork v40：原子随身听列表项点播——MSS 的 playFromMediaId 钩子
+            // 转发进来，从引擎通道送 'vivoMixPlay' 给 Dart（岛点歌 = 改选曲目，不是
+            // 线控重放，不能走 ACTION_MEDIA_BUTTON 链）。
+            ACTION_VIVO_MIX_PLAY -> {
+                dispatchVivoMixPlay(intent?.getStringExtra(EXTRA_VIVO_MIX_MEDIA_ID))
+                return START_NOT_STICKY
+            }
             ACTION_MEDIA_BUTTON -> {
                 // 线控耳机唤醒播放：先保证前台服务状态（startForegroundService 必须尽快
                 // 调用 startForeground，否则 Android 12+ 会抛 ForegroundServiceDidNotStartInTimeException）
@@ -1427,6 +1478,21 @@ class AudioPlaybackService : Service() {
             MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
                 .invokeMethod(method, args)
         }
+    }
+
+    /// MD3Music fork v40：原子随身听列表项点播——把岛点的 media id 送回 Dart，
+    /// 由 Dart 按 `<来源>:<songId>` 从对应列表里找 Song 再播（稳定寻址，不受
+    /// 队列位移影响）。action 与 playFromMediaId 钩子的链路见
+    /// MD3MusicMediaSessionService 的注释。
+    private fun dispatchVivoMixPlay(mediaId: String?) {
+        if (mediaId.isNullOrEmpty()) return
+        val engine = flutterEngine ?: staticFlutterEngine
+        if (engine == null) {
+            Log.i(TAG, "vivo mix play dropped (no engine): $mediaId")
+            return
+        }
+        MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
+            .invokeMethod("vivoMixPlay", mapOf("mediaId" to mediaId))
     }
 
     /// 解决方案B阶段5：前台服务保活通知。
@@ -2330,47 +2396,6 @@ class AudioPlaybackService : Service() {
             // P0: 异常路径也必须释放 native 资源，避免 FD 泄漏
             try { retriever.release() } catch (_: Exception) {}
         }
-    }
-
-    /// MD3Music fork v39：接收 Dart 推送的原子随身听（vivomusicmix）三棵列表快照。
-    ///
-    /// 岛（com.vivo.musicwidgetmix）在能力位放行后经 MediaBrowserServiceCompat 绑定
-    /// 来取列表，列表项 media id 口径 `<来源>:<下标>:<标题|歌手 hash>`：来源前缀区分
-    /// 当前队列/收藏/本地，hash 保证同歌改名后 id 变化（岛靠 id 变化识别换曲）。
-    private fun updateVivoMixLists(args: Any?) {
-        val map = args as? Map<*, *> ?: return
-        fun parse(key: String, source: String): List<VivoMixLibrary.Item> {
-            val raw = map[key] as? List<*> ?: return emptyList()
-            val out = ArrayList<VivoMixLibrary.Item>(raw.size)
-            raw.forEachIndexed { index, element ->
-                val m = element as? Map<*, *> ?: return@forEachIndexed
-                val title = m["title"]?.toString().orEmpty()
-                val artist = m["artist"]?.toString().orEmpty()
-                val album = m["album"]?.toString()
-                val artwork = m["artworkUri"]?.toString()
-                val duration = (m["durationMs"] as? Number)?.toLong() ?: 0L
-                val hash = Integer.toHexString("$title|$artist".hashCode())
-                out.add(
-                    VivoMixLibrary.Item(
-                        mediaId = "$source:$index:$hash",
-                        title = title,
-                        artist = artist,
-                        album = album,
-                        artworkUri = artwork,
-                        durationMs = duration,
-                    )
-                )
-            }
-            return out
-        }
-        val current = parse("current", VivoMixLibrary.SOURCE_CURRENT)
-        val favorites = parse("favorites", VivoMixLibrary.SOURCE_FAVORITE)
-        val local = parse("local", VivoMixLibrary.SOURCE_LOCAL)
-        VivoMixLibrary.replace(current, favorites, local)
-        Log.i(
-            TAG,
-            "vivo mix lists updated: current=${current.size} fav=${favorites.size} local=${local.size}"
-        )
     }
 
     private fun showNotification(

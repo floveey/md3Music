@@ -121,10 +121,10 @@ import java.util.concurrent.atomic.AtomicReference;
   /**
    * MD3Music fork v39：legacy browse 子节点提供者（App 侧注入 vivo 原子随身听的三棵
    * 列表树）。接口声明在 {@link MediaSessionService}——本类是包内可见，App 侧无法引用
-   * 它的嵌套类型。
+   * 它的嵌套类型。v40：volatile——写发生在 impl.lock 内，读在本类主线程无锁。
    */
   @Nullable
-  private MediaSessionService.BrowseChildrenProvider browseChildrenProvider;
+  private volatile MediaSessionService.BrowseChildrenProvider browseChildrenProvider;
 
   /** MD3Music fork v39：注入子节点提供者。 */
   public void setBrowseChildrenProvider(

@@ -5,23 +5,22 @@ import androidx.media3.session.legacy.MediaBrowserCompat
 import androidx.media3.session.legacy.MediaDescriptionCompat
 
 /**
- * MD3Music fork v39：vivo 原子随身听（vivomusicmix）的三棵列表树。
+ * MD3Music fork v40：vivo 原子随身听（vivomusicmix）的三棵列表树。
  *
  * 协议事实（真机实测 + vivo 侧反编译口径，2026-10-24）：
  * - 岛（com.vivo.musicwidgetmix）先看 metadata 里的能力位
- *   `vivomusicmix.media.metadata.support_event`：我们只声明 31（播控/信息/图/歌词/
- *   进度）时，岛把"播放列表"按钮置灰且**连请求都不发**；声明列表位后，岛会经
- *   MediaBrowserServiceCompat 绑定来取列表（实测日志：external bind
- *   action=android.media.browse.MediaBrowserService）。
+ *   `vivomusicmix.media.metadata.support_event`：不含列表位时岛把"播放列表"按钮置灰
+ *   且**连请求都不发**；声明后经 MediaBrowserServiceCompat 绑定来取列表。
  * - 三个父节点：vivomusicmix_current_list / favorite_list / local_list
- *   （对应面板上的"播放列表 / 收藏列表 / 下载列表"三个 tab）。
- * - 分页：请求 options 带 `vivomusicmix_key_media_page`（0 起）；返回项的
- *   description extras 带 `vivomusicmix_key_has_more` 与 `vivomusicmix_key_media_page`
- *   （下一页号）。岛从一页的最后一项读它。
- * - 空列表必须回一条约定 media id（否则岛会一直加载并报网络错误）。
- * - 列表项 media id：`<来源>:<下标>:<标题|歌手 hash>`，岛按 media id 回播。
+ *   （对应面板"播放列表 / 收藏列表 / 下载列表"三个 tab）。
+ * - 分页：请求 options 带 `vivomusicmix_key_media_page`；返回项的 description
+ *   extras 带 `vivomusicmix_key_has_more` 与 `vivomusicmix_key_media_page`（下一页）。
+ * - 空列表必须回一条约定 media id（否则岛一直加载并报网络错误）。
+ * - 列表项 media id：`<来源>:<songId>`（songId 为 Dart 侧 Song.id，稳定键——下标进
+ *   id 会随队列插删整体漂移，v39 口径已废弃）；岛按 media id 回播，经
+ *   MediaSessionLegacyStub 的 playFromMediaId 钩子转发回 Dart。
  *
- * 数据来自 Dart 主动推送（不在 binder 回调里回拉，避免卡住岛的调用线程）。
+ * 数据来自 Dart 主动推送；快照以单个不可变对象整体替换，避免三棵树撕裂。
  */
 object VivoMixLibrary {
 
@@ -45,60 +44,76 @@ object VivoMixLibrary {
     /** 空列表约定的 media id：岛读到它即停止加载（否则一直转圈并报网络错误）。 */
     const val EMPTY_MEDIA_ID = "vivomusicmix:empty"
 
-    /** 一条列表项。 */
+    /** 一条列表项。songId 为 Dart 侧 Song.id（稳定寻址键）。 */
     data class Item(
-        val mediaId: String,
+        val songId: String,
         val title: String,
         val artist: String,
         val album: String?,
         val artworkUri: String?,
         val durationMs: Long,
+    ) {
+        val mediaId: String get() = "$sourcePrefix:$songId"
+
+        val sourcePrefix: String get() = mediaId.substringBefore(':')
+    }
+
+    /** 三棵树的不可变快照（整体替换）。 */
+    data class Snapshot(
+        val current: List<Item>,
+        val favorites: List<Item>,
+        val local: List<Item>,
     )
 
     @Volatile
-    var current: List<Item> = emptyList()
+    private var snapshot: Snapshot = Snapshot(emptyList(), emptyList(), emptyList())
 
-    @Volatile
-    var favorites: List<Item> = emptyList()
-
-    @Volatile
-    var local: List<Item> = emptyList()
-
-    /** Dart 推送到达时整体替换三棵树的快照。 */
+    /** Dart 推送到达时整体替换。 */
     fun replace(currentItems: List<Item>, favoriteItems: List<Item>, localItems: List<Item>) {
-        current = currentItems
-        favorites = favoriteItems
-        local = localItems
+        snapshot = Snapshot(currentItems, favoriteItems, localItems)
+    }
+
+    fun currentList(): List<Item> = snapshot.current
+    fun favoritesList(): List<Item> = snapshot.favorites
+    fun localList(): List<Item> = snapshot.local
+
+    /** 按 media id 反查（点播回放用）。 */
+    fun find(mediaId: String?): Item? {
+        if (mediaId.isNullOrEmpty()) return null
+        val s = snapshot
+        return s.current.firstOrNull { it.mediaId == mediaId }
+            ?: s.favorites.firstOrNull { it.mediaId == mediaId }
+            ?: s.local.firstOrNull { it.mediaId == mediaId }
     }
 
     private fun listOf(parentId: String?): List<Item>? =
         when (parentId) {
-            PARENT_CURRENT -> current
-            PARENT_FAVORITE -> favorites
-            PARENT_LOCAL -> local
+            PARENT_CURRENT -> snapshot.current
+            PARENT_FAVORITE -> snapshot.favorites
+            PARENT_LOCAL -> snapshot.local
             else -> null
         }
 
     /**
-     * 构造一页 children。
-     *
-     * @param parentId 岛请求的父节点
-     * @param options 岛带上来的分页参数（`vivomusicmix_key_media_page`，0 起）
-     * @return 该页的 MediaItem；父节点不认识时返回 null（调用方回空列表）
+     * 构造一页 children。所有异常路径（未知父节点/越界/空树）一律回哨兵项，
+     * 保证岛侧"停止加载"而不是转圈。
      */
     fun buildChildren(
         parentId: String?,
         options: Bundle?,
-    ): List<MediaBrowserCompat.MediaItem>? {
-        val items = listOf(parentId) ?: return null
-        if (items.isEmpty()) return listOf(emptyItem())
-        val page = options?.getInt(KEY_PAGE, 0) ?: 0
-        val from = page * PAGE_SIZE
+    ): List<MediaBrowserCompat.MediaItem> {
+        val items = listOf(parentId)
+        if (items == null || items.isEmpty()) return listOf(emptyItem())
+        // 页号防御：岛端把页号写成 Long 时 getInt 会静默回默认值，这里按 Number 兜取；
+        // 负数/溢出一律压回 0，from 用 Long 计算避免 page*PAGE_SIZE 溢出。
+        val pageRaw = (options?.get(KEY_PAGE)) as? Number
+        val page = (pageRaw?.toInt() ?: 0).coerceAtLeast(0)
+        val from = page.toLong() * PAGE_SIZE
         if (from >= items.size) return listOf(emptyItem())
-        val to = minOf(from + PAGE_SIZE, items.size)
+        val to = minOf(from + PAGE_SIZE, items.size.toLong()).toInt()
         val hasMore = to < items.size
         val out = ArrayList<MediaBrowserCompat.MediaItem>(to - from)
-        for (i in from until to) {
+        for (i in from.toInt() until to) {
             val item = items[i]
             val extras = Bundle().apply {
                 putBoolean(KEY_HAS_MORE, hasMore)
@@ -111,16 +126,22 @@ object VivoMixLibrary {
                 .setDescription(item.album)
                 .setExtras(extras)
                 .build()
-            out.add(MediaBrowserCompat.MediaItem(description, 0))
+            // FLAG_PLAYABLE：叶子必须可播，否则按 flags 判定可点性的浏览器会忽略该行。
+            out.add(MediaBrowserCompat.MediaItem(description, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE))
         }
         return out
     }
 
-    /** 空列表标记项（media id 必须非空，否则 MediaItem 构造直接抛）。 */
+    /** 空列表哨兵项（extras 形状与正常项一致，防岛读空指针）。 */
     private fun emptyItem(): MediaBrowserCompat.MediaItem {
+        val extras = Bundle().apply {
+            putBoolean(KEY_HAS_MORE, false)
+            putInt(KEY_PAGE, 0)
+        }
         val description = MediaDescriptionCompat.Builder()
             .setMediaId(EMPTY_MEDIA_ID)
             .setTitle("")
+            .setExtras(extras)
             .build()
         return MediaBrowserCompat.MediaItem(description, 0)
     }

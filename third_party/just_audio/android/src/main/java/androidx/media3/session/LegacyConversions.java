@@ -106,15 +106,13 @@ import java.util.concurrent.TimeoutException;
 
   private static final String TAG = "LegacyConversions";
 
-  // MD3Music fork: 原子随身听（vivomusicmix）能力位常量。
-  // 字段名照抄 vivo 官方拼写；compat 普通键经 parcel 往返成为 framework 顶层键。
-  // v38 探针：原值 31（7|8|16=播控+歌词+进度）不带任何列表位，原子随身听的
-  // "播放列表"按钮因此置灰（真机实测：岛侧零 browse 请求——它按能力位决定要不要
-  // 列表入口，连请求都不发）。本次一次性声明全能力位 2015 = 31|64|128|256|512|
-  // 1024（覆盖两套反编译口径里与列表/收藏/循环相关的全部位），先判定"位机制"
-  // 是否为唯一闸门；随后按岛的实际反应收敛到最小位集。
+  // MD3Music fork v40：原子随身听能力位（单一来源收敛）。
+  // 31（播控/信息/图/歌词/进度）+ 列表入口与三类列表位。位表有两套反编译口径
+  // （MusicCardProtocol/LastWave：256|512|1024=三类列表；7tattoo：64=列表入口），
+  // v38 全位探针实测岛取列表成立后，此处保留两口径的并集 1887 = 31|64|256|512|1024；
+  // 待真机二分收敛最小位集后回填。不再随歌词有无增删（能力位描述 App 能力）。
   static final String VMM_SUPPORT_EVENT_KEY = "vivomusicmix.media.metadata.support_event";
-  static final long VMM_SUPPORT_EVENT_VALUE = 2015L;
+  static final long VMM_SUPPORT_EVENT_VALUE = 1887L;
 
   private static boolean isVivoFamily() {
     return "vivo".equalsIgnoreCase(Build.MANUFACTURER)

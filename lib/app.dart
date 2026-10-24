@@ -721,6 +721,8 @@ class _AppViewState extends State<_AppView> {
     // 复用重建后首帧前的深链恰好到达，会读到失效 context；置空后这类深链
     // 不清 pending，由重建后的 _AppView postFrame 消费兜底补开。
     MediaNotificationService.onOpenCardLyric = null;
+    // v40：原子随身听列表同步一并解绑（去抖 Timer、provider 监听、点播回调）。
+    VivoMixSync.instance.dispose();
     _shortcutConfig?.removeListener(_applyDesktopShortcuts);
     _playerProvider?.removeListener(_onPlayerChanged);
     _backgroundThemeProvider?.removeListener(_onBackgroundChanged);

@@ -763,6 +763,13 @@ class MainActivity : FlutterActivity() {
                     AudioPlaybackService.prefetchCovers(this, urls)
                     result.success(true)
                 }
+                // MD3Music fork v40：原子随身听三棵列表快照——headless 通道已有处理，
+                // 但前台主通道（本 handler）缺失会让前台推送全部 notImplemented 被 Dart
+                // 空 catch 吞掉（第六轮审查 P0）。补注册，转发 APS 的静态解析。
+                "updateVivoMixLists" -> {
+                    AudioPlaybackService.updateVivoMixLists(call.arguments)
+                    result.success(true)
+                }
                 // 蓝牙歌词兼容通道；原生端保持共享 MediaSession 的歌曲身份不变。
                 "updateBluetoothLyric" -> {
                     val intent = Intent(this, AudioPlaybackService::class.java).apply {

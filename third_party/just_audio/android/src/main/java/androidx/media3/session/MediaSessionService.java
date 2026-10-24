@@ -263,16 +263,16 @@ public abstract class MediaSessionService extends Service {
     checkNotNull(session, "session must not be null");
     checkArgument(!session.isReleased(), "session is already released");
     @Nullable MediaSession old;
+    // MD3Music fork v40：provider 的读取与写入都持 lock（第六轮审查：原写在
+    // synchronized 块外，构成 @GuardedBy 字段的数据竞争）。addSession 允许任意
+    // 线程调用，锁内快照后再挂到 impl，锁序保持 service.lock → impl.lock 单向。
+    final MediaSessionImpl sessionImpl = session.getImpl();
     synchronized (lock) {
       old = sessions.get(session.getId());
       checkArgument(old == null || old == session, "Session ID should be unique");
       sessions.put(session.getId(), session);
-    }
-    // MD3Music fork v39：新会话接入时把 browse 子节点提供者套上去（vivo 原子随身听
-    // 的三棵列表树）。legacy browser stub 懒创建，故挂到 impl 上——impl 在建 stub 时
-    // 会套用（见 MediaSessionImpl#createLegacyBrowserService）。
-    MediaSessionImpl sessionImpl = session.getImpl();
-    if (sessionImpl != null) {
+      // 新会话接入时把 browse 子节点提供者套上去（vivo 原子随身听列表树）。
+      // legacy browser stub 懒创建，挂到 impl 上——impl 建 stub 时会套用。
       sessionImpl.setLegacyBrowseChildrenProvider(browseChildrenProvider);
     }
     if (old == null) {
@@ -289,7 +289,7 @@ public abstract class MediaSessionService extends Service {
   }
 
   /**
-   * MD3Music fork v39：legacy browse 子节点提供者（vivo 原子随身听列表树）。
+   * MD3Music fork v40：legacy browse 子节点提供者（vivo 原子随身听列表树）。
    *
    * <p>接口声明在本类（public）里：{@link MediaSessionServiceLegacyStub} 是包内可见，
    * App 侧无法引用它的嵌套类型。
@@ -299,6 +299,21 @@ public abstract class MediaSessionService extends Service {
     List<androidx.media3.session.legacy.MediaBrowserCompat.MediaItem> onLoadChildren(
         @Nullable String parentId, @Nullable Bundle options);
   }
+
+  /**
+   * MD3Music fork v40：playFromMediaId 消费钩子（vivo 原子随身听列表项点播）。
+   *
+   * <p>App 注入后，legacy 控制器的 playFromMediaId 先经钩子；返回 true 表示已消费
+   * （默认实现会把只有 mediaId、没有 URI 的 item 塞进 ExoPlayer，播不出且污染
+   * media3 时间线）。
+   */
+  public interface PlayFromMediaIdHook {
+    boolean onPlayFromMediaId(@Nullable String mediaId);
+  }
+
+  /** MD3Music fork v40：全局钩子（单会话宿主应用，恒单实例）。 */
+  @Nullable
+  public static volatile PlayFromMediaIdHook playFromMediaIdHook;
 
   /** MD3Music fork v39：browse 子节点提供者（App 侧注入）。 */
   @GuardedBy("lock")

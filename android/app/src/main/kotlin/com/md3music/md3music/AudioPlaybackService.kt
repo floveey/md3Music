@@ -1830,6 +1830,11 @@ class AudioPlaybackService : Service() {
                         )
                         result.success(true)
                     }
+                    "updateVivoMixLists" -> {
+                        // MD3Music fork v39：原子随身听三棵列表树的快照（Dart 推来）。
+                        updateVivoMixLists(call.arguments)
+                        result.success(true)
+                    }
                     "updateLyricInfo" -> {
                         applyLyricInfoUpdate(
                             call.argument<String>("lyricInfo") ?: "",
@@ -2325,6 +2330,47 @@ class AudioPlaybackService : Service() {
             // P0: 异常路径也必须释放 native 资源，避免 FD 泄漏
             try { retriever.release() } catch (_: Exception) {}
         }
+    }
+
+    /// MD3Music fork v39：接收 Dart 推送的原子随身听（vivomusicmix）三棵列表快照。
+    ///
+    /// 岛（com.vivo.musicwidgetmix）在能力位放行后经 MediaBrowserServiceCompat 绑定
+    /// 来取列表，列表项 media id 口径 `<来源>:<下标>:<标题|歌手 hash>`：来源前缀区分
+    /// 当前队列/收藏/本地，hash 保证同歌改名后 id 变化（岛靠 id 变化识别换曲）。
+    private fun updateVivoMixLists(args: Any?) {
+        val map = args as? Map<*, *> ?: return
+        fun parse(key: String, source: String): List<VivoMixLibrary.Item> {
+            val raw = map[key] as? List<*> ?: return emptyList()
+            val out = ArrayList<VivoMixLibrary.Item>(raw.size)
+            raw.forEachIndexed { index, element ->
+                val m = element as? Map<*, *> ?: return@forEachIndexed
+                val title = m["title"]?.toString().orEmpty()
+                val artist = m["artist"]?.toString().orEmpty()
+                val album = m["album"]?.toString()
+                val artwork = m["artworkUri"]?.toString()
+                val duration = (m["durationMs"] as? Number)?.toLong() ?: 0L
+                val hash = Integer.toHexString("$title|$artist".hashCode())
+                out.add(
+                    VivoMixLibrary.Item(
+                        mediaId = "$source:$index:$hash",
+                        title = title,
+                        artist = artist,
+                        album = album,
+                        artworkUri = artwork,
+                        durationMs = duration,
+                    )
+                )
+            }
+            return out
+        }
+        val current = parse("current", VivoMixLibrary.SOURCE_CURRENT)
+        val favorites = parse("favorites", VivoMixLibrary.SOURCE_FAVORITE)
+        val local = parse("local", VivoMixLibrary.SOURCE_LOCAL)
+        VivoMixLibrary.replace(current, favorites, local)
+        Log.i(
+            TAG,
+            "vivo mix lists updated: current=${current.size} fav=${favorites.size} local=${local.size}"
+        )
     }
 
     private fun showNotification(

@@ -27,6 +27,7 @@ import 'core/services/fm_widget_sync.dart';
 import 'core/services/lyricon_provider_service.dart';
 import 'core/services/media_notification_service.dart';
 import 'core/services/music_haptics_service.dart';
+import 'core/services/vivo_mix_sync.dart';
 import 'core/services/startup_auto_play.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/motion_constants.dart';
@@ -376,6 +377,12 @@ class _AppViewState extends State<_AppView> {
       kugou: context.read<KugouProvider>(),
       player: context.read<PlayerProvider>(),
       favorites: context.read<FavoritesProvider>(),
+    );
+    // MD3Music fork v39：vivo 原子随身听的列表快照（当前队列/收藏/本地）。
+    VivoMixSync.instance.attach(
+      player: context.read<PlayerProvider>(),
+      favorites: context.read<FavoritesProvider>(),
+      library: context.read<LibraryProvider>(),
     );
   }
 

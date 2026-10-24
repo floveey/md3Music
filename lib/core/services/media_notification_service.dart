@@ -257,6 +257,24 @@ class MediaNotificationService {
     } catch (_) {}
   }
 
+  /// MD3Music fork v39：把 vivo 原子随身听（vivomusicmix）的三棵列表快照推给原生。
+  ///
+  /// 岛在能力位放行后经 MediaBrowserServiceCompat 绑定来取列表；原生侧只读内存
+  /// 快照，故由 Dart 主动推（不在 binder 回调里回拉，避免卡住岛的调用线程）。
+  static Future<void> updateVivoMixLists({
+    required List<Map<String, dynamic>> current,
+    required List<Map<String, dynamic>> favorites,
+    required List<Map<String, dynamic>> local,
+  }) async {
+    try {
+      await _channel.invokeMethod('updateVivoMixLists', {
+        'current': current,
+        'favorites': favorites,
+        'local': local,
+      });
+    } catch (_) {}
+  }
+
   // 桌面歌词（悬浮窗）相关
   static Future<bool> hasOverlayPermission() async {
     try {

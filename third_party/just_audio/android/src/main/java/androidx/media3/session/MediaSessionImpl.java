@@ -153,6 +153,11 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
   @Nullable
   private MediaSessionServiceLegacyStub browserServiceLegacyStub;
 
+  /** MD3Music fork v39：legacy browse 子节点提供者（vivo 原子随身听列表树）。 */
+  @GuardedBy("lock")
+  @Nullable
+  private MediaSessionService.BrowseChildrenProvider legacyBrowseChildrenProvider;
+
   @GuardedBy("lock")
   private boolean closed;
 
@@ -857,7 +862,25 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
       MediaSessionCompat.Token compatToken) {
     MediaSessionServiceLegacyStub stub = new MediaSessionServiceLegacyStub(this);
     stub.initialize(compatToken);
+    // MD3Music fork v39：注入 browse 子节点提供者（vivo 原子随身听列表树）。
+    stub.setBrowseChildrenProvider(legacyBrowseChildrenProvider);
     return stub;
+  }
+
+  /**
+   * MD3Music fork v39：设置 legacy browse 子节点提供者。
+   *
+   * <p>legacy browser stub 懒创建（首次 browse 绑定时才建），故既要在建 stub 时套用，
+   * 也要在 stub 已存在时补挂。
+   */
+  protected void setLegacyBrowseChildrenProvider(
+      @Nullable MediaSessionService.BrowseChildrenProvider provider) {
+    synchronized (lock) {
+      legacyBrowseChildrenProvider = provider;
+      if (browserServiceLegacyStub != null) {
+        browserServiceLegacyStub.setBrowseChildrenProvider(provider);
+      }
+    }
   }
 
   protected void setSessionPositionUpdateDelayMsOnHandler(long updateDelayMs) {

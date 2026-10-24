@@ -47,6 +47,15 @@ class MD3MusicMediaSessionService : MediaSessionService() {
             )
         )
         super.onCreate()
+        // MD3Music fork v39：vivo 原子随身听（vivomusicmix）的三棵列表树。
+        // 岛在能力位放行后会经 MediaBrowserServiceCompat 绑定来取列表（真机实证：
+        // external bind action=android.media.browse.MediaBrowserService），而我们
+        // legacy stub 的默认实现是 sendResult(null)（恒空）——这里注入真实内容：
+        // 当前播放列表 / 收藏列表 / 下载列表（分页键 vivomusicmix_key_media_page）。
+        // 数据由 Dart 主动推送（VivoMixLibrary 内存快照），不在 binder 回调里回拉。
+        setLegacyBrowseChildrenProvider { parentId, options ->
+            VivoMixLibrary.buildChildren(parentId, options)
+        }
         // 注册为 fork 的会话 host：fork 创建/已有活跃会话后 addSession 到本服务渲染通知
         AudioPlayer.setMediaSessionServiceHost(this)
         // MD3Music fork v21（连车拉起）：读取外部绑定时自动拉起+续播的开关

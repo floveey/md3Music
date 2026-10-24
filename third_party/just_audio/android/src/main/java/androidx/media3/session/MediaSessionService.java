@@ -268,6 +268,13 @@ public abstract class MediaSessionService extends Service {
       checkArgument(old == null || old == session, "Session ID should be unique");
       sessions.put(session.getId(), session);
     }
+    // MD3Music fork v39：新会话接入时把 browse 子节点提供者套上去（vivo 原子随身听
+    // 的三棵列表树）。legacy browser stub 懒创建，故挂到 impl 上——impl 在建 stub 时
+    // 会套用（见 MediaSessionImpl#createLegacyBrowserService）。
+    MediaSessionImpl sessionImpl = session.getImpl();
+    if (sessionImpl != null) {
+      sessionImpl.setLegacyBrowseChildrenProvider(browseChildrenProvider);
+    }
     if (old == null) {
       // Session has returned for the first time. Register callbacks.
       // TODO(b/191644474): Check whether the session is registered to multiple services.
@@ -278,6 +285,40 @@ public abstract class MediaSessionService extends Service {
             notificationManager.addSession(session);
             session.setListener(new MediaSessionListener());
           });
+    }
+  }
+
+  /**
+   * MD3Music fork v39：legacy browse 子节点提供者（vivo 原子随身听列表树）。
+   *
+   * <p>接口声明在本类（public）里：{@link MediaSessionServiceLegacyStub} 是包内可见，
+   * App 侧无法引用它的嵌套类型。
+   */
+  public interface BrowseChildrenProvider {
+    @Nullable
+    List<androidx.media3.session.legacy.MediaBrowserCompat.MediaItem> onLoadChildren(
+        @Nullable String parentId, @Nullable Bundle options);
+  }
+
+  /** MD3Music fork v39：browse 子节点提供者（App 侧注入）。 */
+  @GuardedBy("lock")
+  @Nullable
+  private BrowseChildrenProvider browseChildrenProvider;
+
+  /**
+   * MD3Music fork v39：设置 legacy browse 子节点提供者。
+   *
+   * <p>会话创建前调用最佳；会话已存在时会立即补挂（见 {@link #addSession}）。
+   */
+  public void setLegacyBrowseChildrenProvider(@Nullable BrowseChildrenProvider provider) {
+    synchronized (lock) {
+      browseChildrenProvider = provider;
+      for (MediaSession session : sessions.values()) {
+        MediaSessionImpl sessionImpl = session.getImpl();
+        if (sessionImpl != null) {
+          sessionImpl.setLegacyBrowseChildrenProvider(provider);
+        }
+      }
     }
   }
 

@@ -1631,12 +1631,15 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         AudioPlayer p = sActivePlayer;
         if (p != null) {
             p.applySessionTitleArtist(expectedMediaId, generation, title, artist);
+            // v43（审查 P1）：活跃播放器已存在，任何滞留 pending 都是陈旧的——清。
+            sPendingMetadata = null;
         } else {
-            // v42：标题/歌手早到同样暂存（与封面 pending 合并成一份完整快照时
-            // 以先到字段为底、后到覆盖同名字段；简化实现：仅当无 pending 时存
-            // 轻量版，完整版 updateActiveSessionMetadata 到达即覆盖）。
+            // v42：标题/歌手早到同样暂存。v43：加代次守卫——旧歌的 lite pending
+            // 不得阻止新歌（generation 更大）的标题覆盖，否则岛/锁屏会短暂显示
+            // 上一首的歌名（"错信息卡片"比"无信息卡片"更扎眼）。
             Log.w("AudioFocusFork", "updateActiveSessionTitleArtist: no active AudioPlayer, pending-lite");
-            if (sPendingMetadata == null) {
+            PendingMetadata cur = sPendingMetadata;
+            if (cur == null || generation >= cur.generation) {
                 sPendingMetadata = new PendingMetadata(
                         expectedMediaId, generation, title, artist, null, null);
             }
@@ -2584,6 +2587,9 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         if (sActivePlayer == this) {
             sActivePlayer = null;
         }
+        // MD3Music fork v43（审查 P1）：dispose 一并清 pending 元数据——
+        // 单槽持有 ~1MB 位图，播放器销毁后不再有正确的消费时机，滞留即泄漏向。
+        sPendingMetadata = null;
     }
 
     private void abortSeek() {

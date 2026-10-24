@@ -4764,7 +4764,7 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
         // 开启时下方追加速度滑条与颜色选择。
         if (!kTvBuild)
           ValueListenableBuilder<bool>(
-            valueListenable: _settingsRepository.songDanmakuEnabled,
+            valueListenable: SettingsRepository.songDanmakuEnabled,
             builder: (context, enabled, _) => Column(
               children: [
                 SwitchListTile(
@@ -4782,7 +4782,7 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                 ),
                 if (enabled)
                   ValueListenableBuilder<double>(
-                    valueListenable: _settingsRepository.songDanmakuSpeed,
+                    valueListenable: SettingsRepository.songDanmakuSpeed,
                     builder: (context, speed, _) => ListTile(
                       leading: Icon(Icons.speed_outlined,
                           color: colorScheme.primary),
@@ -4803,7 +4803,7 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                   ),
                 if (enabled)
                   ValueListenableBuilder<int?>(
-                    valueListenable: _settingsRepository.songDanmakuColor,
+                    valueListenable: SettingsRepository.songDanmakuColor,
                     builder: (context, colorValue, _) => ListTile(
                       leading: Icon(Icons.palette_outlined,
                           color: colorScheme.primary),
@@ -4813,6 +4813,20 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                         onSelected: (c) =>
                             _settingsRepository.setSongDanmakuColor(c),
                       ),
+                    ),
+                  ),
+                // MD3Music fork v47：只看弹幕——隐藏播放页右下角"发弹幕"按钮。
+                if (enabled)
+                  ValueListenableBuilder<bool>(
+                    valueListenable: SettingsRepository.songDanmakuReadOnly,
+                    builder: (context, readOnly, _) => SwitchListTile(
+                      title: const Text('只看弹幕'),
+                      subtitle: const Text('隐藏播放页的发弹幕按钮，仅浏览弹幕'),
+                      value: readOnly,
+                      onChanged: (v) {
+                        AppHaptics.lightImpact(HapticCategory.control);
+                        _settingsRepository.setSongDanmakuReadOnly(v);
+                      },
                     ),
                   ),
               ],

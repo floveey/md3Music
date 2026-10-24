@@ -45,6 +45,8 @@ class SettingsRepository {
   //（int color value，null=跟随弹幕池/默认白）。静态镜像供播放页即时生效。
   static const String _keySongDanmakuSpeed = 'settings_song_danmaku_speed';
   static const String _keySongDanmakuColor = 'settings_song_danmaku_color';
+  // MD3Music fork v47：只看弹幕（隐藏播放页"发弹幕"按钮）。
+  static const String _keySongDanmakuReadOnly = 'settings_song_danmaku_read_only';
 
   /// 封面流歌单源（CoverFlowSource.rawValue：'daily' / 'personalFm' / 'homeDiscover'）。
   /// 存原始字符串而非 int 下标：枚举顺序是 UI 契约，持久化不跟它走。
@@ -525,6 +527,24 @@ class SettingsRepository {
     } else {
       await prefs.setInt(_keySongDanmakuColor, value);
     }
+  }
+
+  /// MD3Music fork v47：只看弹幕——隐藏播放页右下角的"发弹幕"按钮。
+  /// 默认关（按钮显示）。静态镜像供播放页即时生效。
+  static final ValueNotifier<bool> songDanmakuReadOnly =
+      ValueNotifier<bool>(false);
+
+  Future<bool> getSongDanmakuReadOnly() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getBool(_keySongDanmakuReadOnly) ?? false;
+    songDanmakuReadOnly.value = v;
+    return v;
+  }
+
+  Future<void> setSongDanmakuReadOnly(bool value) async {
+    songDanmakuReadOnly.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keySongDanmakuReadOnly, value);
   }
 
   /// 「听歌数据云同步」总开关，默认开启。

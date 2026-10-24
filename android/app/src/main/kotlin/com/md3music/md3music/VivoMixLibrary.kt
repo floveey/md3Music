@@ -139,9 +139,9 @@ object VivoMixLibrary {
     }
 
     /**
-     * 空列表哨兵项。v41：title/subtitle 必须都给文案——岛对未设置的 subtitle 会
-     * 渲染成字面 "null"（真机实测"空null"；LastWave 同结论：subtitle 不设会
-     * 显示成文本，他们对每项都 `subtitle ?: ""`）。
+     * 空列表哨兵项。subtitle 必须给非空真实文案：未设置渲染成字面 "null"（v41
+     * 真机实测"空null"；LastWave 同结论，他们对每项都 `subtitle ?: ""`），
+     * 空串也渲染成"空"字（v46 真机实测"暂无歌曲"下显示"空"）。
      */
     private fun emptyItem(): MediaBrowserCompat.MediaItem {
         val extras = Bundle().apply {
@@ -151,7 +151,7 @@ object VivoMixLibrary {
         val description = MediaDescriptionCompat.Builder()
             .setMediaId(EMPTY_MEDIA_ID)
             .setTitle("暂无歌曲")
-            .setSubtitle("")
+            .setSubtitle("播放后自动同步")
             .setExtras(extras)
             .build()
         return MediaBrowserCompat.MediaItem(description, 0)

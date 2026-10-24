@@ -119,6 +119,9 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   double _speedScale = 1.0;
   Color? _overrideColor;
 
+  /// v47：只看弹幕——隐藏右下角"发弹幕"按钮（设置页可调）。
+  bool _readOnly = false;
+
   /// `TickerMode` 为 false（例如被离屏 TabView 冻结）时不得产帧。
   bool _tickerVisible = true;
 
@@ -138,7 +141,14 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
     SettingsRepository.songDanmakuEnabled.addListener(_onSettingsChanged);
     SettingsRepository.songDanmakuSpeed.addListener(_onAppearanceChanged);
     SettingsRepository.songDanmakuColor.addListener(_onAppearanceChanged);
+    SettingsRepository.songDanmakuReadOnly.addListener(_onReadOnlyChanged);
     SongDanmakuHost.delivery.addListener(_onDelivery);
+  }
+
+  /// v47：只看弹幕开关（隐藏/显示右下角"发弹幕"按钮）。
+  void _onReadOnlyChanged() {
+    if (!mounted) return;
+    setState(() => _readOnly = SettingsRepository.songDanmakuReadOnly.value);
   }
 
   /// v46：速度/颜色变化只影响后续 spawn 与绘制步长——setState 刷新传参即可。
@@ -189,6 +199,7 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
     SettingsRepository.songDanmakuEnabled.removeListener(_onSettingsChanged);
     SettingsRepository.songDanmakuSpeed.removeListener(_onAppearanceChanged);
     SettingsRepository.songDanmakuColor.removeListener(_onAppearanceChanged);
+    SettingsRepository.songDanmakuReadOnly.removeListener(_onReadOnlyChanged);
     SongDanmakuHost.delivery.removeListener(_onDelivery);
     _player?.positionNotifier.removeListener(_onPositionSample);
     _player?.removeListener(_onPlayerChanged);
@@ -424,24 +435,26 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
             ),
           ),
         ),
-        Positioned(
-          right: 8,
-          bottom: 8,
-          child: M3EFilledButton.tonal(
-            onPressed: _openComposer,
-            tooltip: '发弹幕',
-            shape: M3EButtonShape.round,
-            decoration: M3EButtonDecoration(
-              fixedSize: const Size(40, 40),
-              padding: EdgeInsets.zero,
-              backgroundColor:
-                  WidgetStatePropertyAll(colorScheme.secondaryContainer),
-              foregroundColor:
-                  WidgetStatePropertyAll(colorScheme.onSecondaryContainer),
+        // v47：只看弹幕——隐藏"发弹幕"按钮（设置页开关）。
+        if (!_readOnly)
+          Positioned(
+            right: 8,
+            bottom: 8,
+            child: M3EFilledButton.tonal(
+              onPressed: _openComposer,
+              tooltip: '发弹幕',
+              shape: M3EButtonShape.round,
+              decoration: M3EButtonDecoration(
+                fixedSize: const Size(40, 40),
+                padding: EdgeInsets.zero,
+                backgroundColor:
+                    WidgetStatePropertyAll(colorScheme.secondaryContainer),
+                foregroundColor:
+                    WidgetStatePropertyAll(colorScheme.onSecondaryContainer),
+              ),
+              child: const Icon(Icons.subtitles_outlined, size: 20),
             ),
-            child: const Icon(Icons.subtitles_outlined, size: 20),
           ),
-        ),
       ],
     );
   }

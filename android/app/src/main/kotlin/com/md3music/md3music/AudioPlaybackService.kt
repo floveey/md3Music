@@ -1230,8 +1230,6 @@ class AudioPlaybackService : Service() {
                 override fun onNext() { handleMediaButtonCommand("next") }
                 // MediaNotificationService 的切歌命令需要带 commandId 确认；复用媒体键队列
                 // 派发，避免直接 invokeMethod 时因缺少 commandId 被 Dart 端拒绝。
-                override fun onPrevious() { handleMediaButtonCommand("previous") }
-                override fun onNext() { handleMediaButtonCommand("next") }
                 override fun onPause() {
                     Log.i(TAG, "Media3 user pause intent forwarded to Flutter")
                     handleAction(ACTION_PAUSE)

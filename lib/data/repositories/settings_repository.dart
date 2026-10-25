@@ -507,7 +507,8 @@ class SettingsRepository {
     await prefs.setDouble(_keySongDanmakuSpeed, v);
   }
 
-  /// MD3Music fork v46：歌曲弹幕颜色（int ARGB；null=跟随弹幕池/默认白）。
+  /// MD3Music fork v46：歌曲弹幕颜色（int ARGB；null=跟随弹幕池/默认白；
+  /// v49：-1=随机哨值——每条弹幕从固定调色板随机取色）。
   static final ValueNotifier<int?> songDanmakuColor =
       ValueNotifier<int?>(null);
 

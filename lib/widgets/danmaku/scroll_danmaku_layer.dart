@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../core/danmaku/danmaku_entry.dart';
@@ -24,6 +26,8 @@ class ScrollDanmakuLayer extends StatefulWidget {
     this.highlightColor = const Color(0xFFFFD54F),
     // MD3Music fork v46：全局颜色覆盖（null=跟随弹幕池/自身颜色）。
     this.overrideColor,
+    // MD3Music fork v49：随机颜色——每条弹幕从固定调色板随机取色。
+    this.randomColor = false,
   });
 
   /// 弹幕的投放/清空/运行态由外部通过它控制（与 `canvas_danmaku` 的
@@ -47,6 +51,10 @@ class ScrollDanmakuLayer extends StatefulWidget {
 
   /// MD3Music fork v46：全局颜色覆盖（null=跟随弹幕池/自身颜色）。
   final Color? overrideColor;
+
+  /// MD3Music fork v49：随机颜色——每条弹幕从 [_randomPalette] 随机取色
+  /// （自己发送的仍用高亮色）。与 [overrideColor] 互斥，本标志优先。
+  final bool randomColor;
 
   @override
   State<ScrollDanmakuLayer> createState() => _ScrollDanmakuLayerState();
@@ -168,6 +176,20 @@ class _ScrollDanmakuLayerState extends State<ScrollDanmakuLayer> {
 
   int _laneCount = 0;
 
+  /// v49：随机颜色调色板（可读性优先，压在封面上仍清晰）与取色器。
+  static const List<Color> _randomPalette = <Color>[
+    Color(0xFFFFFFFF), // 白
+    Color(0xFFFFD54F), // 浅黄
+    Color(0xFF80DEEA), // 浅青
+    Color(0xFFA5D6A7), // 浅绿
+    Color(0xFFFFCC80), // 浅橙
+    Color(0xFFF48FB1), // 浅粉
+    Color(0xFFCE93D8), // 浅紫
+    Color(0xFF90CAF9), // 浅蓝
+  ];
+
+  final Random _random = Random();
+
   /// 选轨道：优先完全空出来的（右边缘已进屏），否则选最早让出位置的那条，
   /// 新条目就排在那条队尾之后（被容器边缘裁掉，滑进来才可见）。
   int _pickLane(double width, double viewWidth, double height) {
@@ -193,9 +215,12 @@ class _ScrollDanmakuLayerState extends State<ScrollDanmakuLayer> {
     final scaler = MediaQuery.textScalerOf(context);
     final fontSize = scaler.scale(widget.fontSize);
     // v46：overrideColor 非空时覆盖弹幕池颜色（自己发送的仍用高亮色）。
+    // v49：randomColor 模式每条从调色板随机取色（优先于 overrideColor）。
     final color = entry.selfSend
         ? widget.highlightColor
-        : (widget.overrideColor ?? entry.color);
+        : (widget.randomColor
+            ? _randomPalette[_random.nextInt(_randomPalette.length)]
+            : (widget.overrideColor ?? entry.color));
     final style = TextStyle(
       fontSize: fontSize,
       fontWeight: FontWeight.w500,

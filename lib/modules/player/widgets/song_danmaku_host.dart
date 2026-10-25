@@ -119,8 +119,18 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   double _speedScale = 1.0;
   Color? _overrideColor;
 
+  /// v49：随机颜色（每条弹幕从固定调色板随机取色，自己发送的仍用高亮色）。
+  /// 由颜色镜像的哨值 -1 表示，与 overrideColor 互斥。
+  bool _randomColor = false;
+
   /// v47：只看弹幕——隐藏右下角"发弹幕"按钮（设置页可调）。
   bool _readOnly = false;
+
+  /// 颜色镜像 → 覆盖色（-1=随机哨值 → null，由 _randomColor 承载）。
+  static Color? _colorOf(int? value) =>
+      value == null || value < 0 ? null : Color(value);
+
+  static bool _isRandomColor(int? value) => value != null && value < 0;
 
   /// `TickerMode` 为 false（例如被离屏 TabView 冻结）时不得产帧。
   bool _tickerVisible = true;
@@ -137,7 +147,14 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   @override
   void initState() {
     super.initState();
+    // v49：四个镜像全部回填初值——此前只回填 enabled，速度/颜色/只读在新 State
+    // 挂载时静默用默认值（真机实测：设置里调好再进播放页，三项全部失效；
+    // 只有当着播放页面改设置才生效）。监听器只管"变化"，初值必须自己读。
     _enabled = SettingsRepository.songDanmakuEnabled.value;
+    _speedScale = SettingsRepository.songDanmakuSpeed.value;
+    _overrideColor = _colorOf(SettingsRepository.songDanmakuColor.value);
+    _randomColor = _isRandomColor(SettingsRepository.songDanmakuColor.value);
+    _readOnly = SettingsRepository.songDanmakuReadOnly.value;
     SettingsRepository.songDanmakuEnabled.addListener(_onSettingsChanged);
     SettingsRepository.songDanmakuSpeed.addListener(_onAppearanceChanged);
     SettingsRepository.songDanmakuColor.addListener(_onAppearanceChanged);
@@ -152,13 +169,13 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   }
 
   /// v46：速度/颜色变化只影响后续 spawn 与绘制步长——setState 刷新传参即可。
+  /// v49：颜色镜像 -1 哨值 = 随机色。
   void _onAppearanceChanged() {
     if (!mounted) return;
     setState(() {
       _speedScale = SettingsRepository.songDanmakuSpeed.value;
-      _overrideColor = SettingsRepository.songDanmakuColor.value == null
-          ? null
-          : Color(SettingsRepository.songDanmakuColor.value!);
+      _overrideColor = _colorOf(SettingsRepository.songDanmakuColor.value);
+      _randomColor = _isRandomColor(SettingsRepository.songDanmakuColor.value);
     });
   }
 
@@ -429,9 +446,10 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
             child: ScrollDanmakuLayer(
               controller: _danmaku,
               highlightColor: colorScheme.primary,
-              // v46：速度倍率与颜色覆盖（设置页可调）。
+              // v46：速度倍率与颜色覆盖（设置页可调）；v49：随机色模式。
               speed: 120 * _speedScale,
               overrideColor: _overrideColor,
+              randomColor: _randomColor,
             ),
           ),
         ),

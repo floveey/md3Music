@@ -4781,6 +4781,7 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                   },
                 ),
                 if (enabled)
+                  // search: 弹幕 速度 快慢 滚动 倍率
                   ValueListenableBuilder<double>(
                     valueListenable: SettingsRepository.songDanmakuSpeed,
                     builder: (context, speed, _) => ListTile(
@@ -4805,6 +4806,7 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                     ),
                   ),
                 if (enabled)
+                  // search: 弹幕 颜色 随机 彩色
                   ValueListenableBuilder<int?>(
                     valueListenable: SettingsRepository.songDanmakuColor,
                     builder: (context, colorValue, _) => ListTile(
@@ -4820,6 +4822,7 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                   ),
                 // MD3Music fork v47：只看弹幕——隐藏播放页右下角"发弹幕"按钮。
                 if (enabled)
+                  // search: 弹幕 只读 隐藏 发送 按钮
                   ValueListenableBuilder<bool>(
                     valueListenable: SettingsRepository.songDanmakuReadOnly,
                     builder: (context, readOnly, _) => SwitchListTile(
@@ -7034,6 +7037,7 @@ class _DanmakuColorRow extends StatelessWidget {
     0xFFFFCC80, // 浅橙
     0xFFF48FB1, // 浅粉
     0xFFCE93D8, // 浅紫
+    -1, // 随机（v49：每条弹幕从调色板随机取色，哨值 -1）
   ];
 
   @override
@@ -7055,7 +7059,7 @@ class _DanmakuColorRow extends StatelessWidget {
                   height: 32,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: c == null ? Colors.white : Color(c),
+                    color: c == null || c < 0 ? Colors.white : Color(c),
                     border: Border.all(
                       color: current == c ? primary : Colors.black26,
                       width: current == c ? 3 : 1,
@@ -7064,7 +7068,10 @@ class _DanmakuColorRow extends StatelessWidget {
                   child: c == null
                       ? Icon(Icons.auto_awesome,
                           size: 16, color: Colors.black45)
-                      : null,
+                      : c < 0
+                          ? const Icon(Icons.shuffle,
+                              size: 16, color: Colors.black45)
+                          : null,
                 ),
               ),
             ),

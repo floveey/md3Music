@@ -196,6 +196,18 @@ class AudioPlaybackService : Service() {
                 "vivo mix lists updated: current=${current.size} fav=${favorites.size} local=${local.size}"
             )
         }
+
+        /// MD3Music fork v50：解析 Dart 推来的岛状态回显（循环模式 1/2/3 + 当前曲
+        /// 红心），转交 AudioPlayer 写入会话 metadata 并重发。isFav 缺省 = 未知
+        /// （尚无当前曲），原生侧跳过 RATING 不覆盖。
+        @JvmStatic
+        fun updateVivoMixState(args: Any?) {
+            val map = args as? Map<*, *> ?: return
+            val loopMode = (map["loopMode"] as? Number)?.toInt() ?: 0
+            val isFav = map["isFav"] as? Boolean
+            com.ryanheise.just_audio.AudioPlayer.updateVivoIslandState(loopMode, isFav)
+            RingLog.i(TAG, "vivo mix state updated: loopMode=$loopMode isFav=$isFav")
+        }
         /// MD3Music fork（方案A·封面兜底）：前台服务启动被拒（mAllowStartForeground=false，
         /// 如后台切歌/跨fade 收敛瞬间）时由 MainActivity 直接调用注入封面，
         /// 不依赖 AudioPlaybackService 启动。处理 http(s) 在线封面，命中内存缓存免下载。
@@ -1938,6 +1950,12 @@ class AudioPlaybackService : Service() {
                     "updateVivoMixLists" -> {
                         // MD3Music fork v39：原子随身听三棵列表树的快照（Dart 推来）。
                         updateVivoMixLists(call.arguments)
+                        result.success(true)
+                    }
+                    "updateVivoMixState" -> {
+                        // MD3Music fork v50：岛状态回显（循环模式 + 当前曲红心）→
+                        // metadata 重发（岛只在 metadata 变化时读这两个值）。
+                        updateVivoMixState(call.arguments)
                         result.success(true)
                     }
                     "updateLyricInfo" -> {

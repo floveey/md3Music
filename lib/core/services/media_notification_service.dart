@@ -294,6 +294,23 @@ class MediaNotificationService {
     }
   }
 
+  /// MD3Music fork v50：岛状态回显——循环模式（1=列表/2=单曲/3=随机）与当前曲
+  /// 红心。岛只在 metadata 变化时读 LOOP_MODE/RATING 来点亮按钮并计算下一次点击
+  /// （岛端 c0.l0），原生收到后写 metadata 并重发。[isFav] null=尚无当前曲。
+  static Future<void> updateVivoMixState({
+    required int loopMode,
+    required bool? isFav,
+  }) async {
+    try {
+      await _channel.invokeMethod('updateVivoMixState', {
+        'loopMode': loopMode,
+        'isFav': isFav,
+      });
+    } catch (e) {
+      debugPrint('[VivoMixSync] updateVivoMixState failed: $e');
+    }
+  }
+
   /// MD3Music fork v40：原子随身听列表项点播回调（media id = `<来源>:<songId>`）。
   static void Function(String mediaId)? onVivoMixPlay;
 

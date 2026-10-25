@@ -1609,6 +1609,69 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         }
     }
 
+    /// MD3Music fork v50：Dart 推送岛状态回显（循环模式 1/2/3 + 当前曲红心），存静态
+    /// 后立即重发一次会话 metadata——岛端 onMetadataChanged 才会读到新值。播放器未
+    /// 就绪时静态值由下一次 applySessionMetadata（切歌/封面注入）自然带上。
+    public static void updateVivoIslandState(int loopMode, Boolean heart) {
+        sVivoLoopMode = loopMode;
+        sVivoFavHeart = heart;
+        republishAllVivoIsland();
+    }
+
+    /// v50：无参版（MainActivity.onResume 兜底用）——按最近一次 Dart 推送的
+    /// 状态原样重发，触发岛端 onMetadataChanged 刷新源/控制器。
+    public static void republishVivoIslandState() {
+        republishAllVivoIsland();
+    }
+
+    /// v50：活跃会话 + shadow 会话一并重发（审查 P1 修复）——岛可能钉在冷启动
+    /// 绑定的首个会话上（交叉淡化换活跃会话后仍在旧会话读 metadata），只重发
+    /// 活跃会话会让这类岛收不到回显。对每个 everPlayed 实例幂等重发，全部同
+    /// main looper 串行。
+    private static void republishAllVivoIsland() {
+        AudioPlayer p = sActivePlayer;
+        if (p != null) {
+            p.republishVivoIslandMetadata();
+        }
+        synchronized (sPlayers) {
+            for (AudioPlayer other : sPlayers) {
+                if (other == null || other == p || !other.everPlayed) continue;
+                try {
+                    other.republishVivoIslandMetadata();
+                } catch (Throwable ignore) {
+                    // 单个 shadow 会话失败不影响其余（同本文件 mirror 系列口径）。
+                }
+            }
+        }
+    }
+
+    /// v50：把当前会话 metadata 原地重发（只改 overallRating 与 extras，不动播放）。
+    /// 与 applySessionMetadata 同机制（replaceMediaItem 同 uri 只更新 metadata），
+    /// v45 起真机验证不打断播放。
+    private void republishVivoIslandMetadata() {
+        try {
+            MediaItem cur = player.getCurrentMediaItem();
+            if (cur == null) return;
+            androidx.media3.common.MediaMetadata.Builder mb = cur.mediaMetadata.buildUpon();
+            if (sVivoFavHeart != null) {
+                mb.setOverallRating(new androidx.media3.common.HeartRating(sVivoFavHeart));
+            }
+            android.os.Bundle extras = cur.mediaMetadata.extras != null
+                    ? new android.os.Bundle(cur.mediaMetadata.extras)
+                    : new android.os.Bundle();
+            if (sVivoLoopMode >= 1) {
+                extras.putLong(VMM_KEY_LOOP_MODE, sVivoLoopMode);
+            }
+            mb.setExtras(extras);
+            int index = player.getCurrentMediaItemIndex();
+            player.replaceMediaItem(index, cur.buildUpon().setMediaMetadata(mb.build()).build());
+            Log.i("AudioFocusFork", "republishVivoIslandMetadata loop=" + sVivoLoopMode
+                    + " heart=" + sVivoFavHeart);
+        } catch (Exception e) {
+            Log.w("AudioFocusFork", "republishVivoIslandMetadata failed: " + e);
+        }
+    }
+
     /// 由 AudioPlaybackService 封面加载成功后调用（同进程），把封面/标题注入媒体3会话。
     public static void updateActiveSessionMetadata(
             String expectedMediaId,
@@ -1998,6 +2061,14 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     public static final String VMM_ACTION_PLAY_MODE = "vivomusicmix.media.action.PLAY_MODE";
     public static final String VMM_KEY_LOOP_MODE = "vivomusicmix.media.metadata.LOOP_MODE";
 
+    // MD3Music fork v50：原子随身听状态回显源（Dart 权威 → AudioPlaybackService 转推）。
+    // 岛只在 metadata 变化时读 LOOP_MODE（岛端 c0.l0）来显示并计算下一次点击；此前
+    // extras 取自 media3 player 的 repeat/shuffle（Dart 自管队列下恒为列表循环），岛
+    // 永远收到 1 → 每次点击都发"单曲"（真机症状：循环模式只能切到单曲循环）。
+    // sVivoLoopMode 0=未推送（发布时跳过）；sVivoFavHeart null=未知（跳过 RATING）。
+    public static volatile int sVivoLoopMode = 0;
+    public static volatile Boolean sVivoFavHeart = null;
+
     /// 由 App 注册，接收媒体3通知按钮触发的自定义命令。
     public static void setCustomActionListener(CustomActionListener listener) {
         sCustomActionListener = listener;
@@ -2242,6 +2313,11 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             MediaMetadata.Builder mb = cur.mediaMetadata.buildUpon();
             if (title != null && !title.isEmpty()) mb.setTitle(title);
             if (artist != null && !artist.isEmpty()) mb.setArtist(artist);
+            // MD3Music fork v50：红心回显——岛读 metadata RATING 的 heart 位点亮红心
+            // 按钮（岛端 c0.l0；melodist/YTM 补丁同款）。null=未知时不写。
+            if (sVivoFavHeart != null) {
+                mb.setOverallRating(new androidx.media3.common.HeartRating(sVivoFavHeart));
+            }
             // MD3Music fork：注入 artworkUri（Lyricon autoSync / 外部读取封面用），
             // 通知栏封面仍用 artworkData（bitmap，稳定，避免 artUri 异步加载闪烁）。
             if (artUri != null && !artUri.isEmpty()) {
@@ -2266,9 +2342,12 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             // 拷为 framework 顶层键，岛据此渲染循环按钮状态：1=列表/2=单曲/3=随机）。
             // Bundle 是 final：不能用双花括号匿名子类，用局部变量装配。
             // v48：协议口径是 Long（岛端 getLong 读 Int 会拿 0），putInt 改 putLong。
+            // v50：值改用 Dart 权威状态（sVivoLoopMode）——Dart 自管队列下 player 的
+            // repeat/shuffle 恒为列表循环，按它回写岛永远显示"列表循环"。
             android.os.Bundle loopExtras = new android.os.Bundle();
             loopExtras.putLong(VMM_KEY_LOOP_MODE,
-                    player.getShuffleModeEnabled() ? 3
+                    sVivoLoopMode >= 1 ? sVivoLoopMode
+                    : player.getShuffleModeEnabled() ? 3
                     : player.getRepeatMode() == androidx.media3.common.Player.REPEAT_MODE_ONE ? 2 : 1);
             androidx.media3.common.MediaMetadata withLoop =
                     updated.mediaMetadata.buildUpon()

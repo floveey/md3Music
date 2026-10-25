@@ -318,6 +318,15 @@ class MainActivity : FlutterActivity() {
         // 回到前台（如从画中画/锁屏/切后台返回）时重新应用，
         // 防止被系统降频后未恢复（偶现锁 60Hz 的场景之一）。
         applyOptimalRefreshRate()
+        // MD3Music fork v50：原子随身听点歌拉起兜底——岛端到本 App 的 MediaBrowser
+        // 连接随进程重启断链后（D==null），岛点列表项会把 App 拉到前台且丢弃本次
+        // 点击（真机 logcat 实证：Displayed LauncherModernIcon）。这里借 onResume
+        // 重发一次岛 metadata：岛 onMetadataChanged 会刷新源/控制器，用户下一次
+        // 点击即可正常下发 playFromMediaId。未初始化时为 no-op。
+        try {
+            com.ryanheise.just_audio.AudioPlayer.republishVivoIslandState()
+        } catch (_: Throwable) {
+        }
     }
 
     /// 向系统请求当前分辨率下可用的最高刷新率。
@@ -781,6 +790,12 @@ class MainActivity : FlutterActivity() {
                 // 空 catch 吞掉（第六轮审查 P0）。补注册，转发 APS 的静态解析。
                 "updateVivoMixLists" -> {
                     AudioPlaybackService.updateVivoMixLists(call.arguments)
+                    result.success(true)
+                }
+                // MD3Music fork v50：岛状态回显——同上，前台主通道补注册（第六轮
+                // 审查同款教训：headless 有而主通道缺 → 前台推送 notImplemented 被吞）。
+                "updateVivoMixState" -> {
+                    AudioPlaybackService.updateVivoMixState(call.arguments)
                     result.success(true)
                 }
                 // 蓝牙歌词兼容通道；原生端保持共享 MediaSession 的歌曲身份不变。

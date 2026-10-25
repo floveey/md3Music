@@ -40,6 +40,10 @@ class VivoMixSync {
   Timer? _debounce;
   String? _lastPayloadFingerprint;
 
+  /// v50：状态回显去重（循环模式 / 当前曲红心）。
+  int? _lastLoopMode;
+  bool? _lastIsFav;
+
   /// App 首帧后调用（provider 均已创建）；重复调用为换绑（引擎重建场景）。
   void attach({
     required PlayerProvider player,
@@ -104,6 +108,9 @@ class VivoMixSync {
     final fingerprint = _fingerprint(currentSongs) + '|'
         + _fingerprint(favoriteSongs) + '|'
         + _fingerprint(localSongs);
+    // v50：状态回显必须在指纹闸门**之前**——切循环模式/红心时列表指纹不变，
+    // 放在闸门后会被提前 return 吞掉（岛上按钮状态就永远不更新）。
+    _pushState(player, favorites);
     if (fingerprint == _lastPayloadFingerprint) {
       debugPrint('[VivoMixSync] push skipped: current=${currentSongs.length} '
           'fav=${favoriteSongs.length} local=${localSongs.length}');
@@ -119,6 +126,21 @@ class VivoMixSync {
       favorites: favoriteSongs.map(_toMap).toList(growable: false),
       local: localSongs.map(_toMap).toList(growable: false),
     );
+  }
+
+  /// v50：状态回显（循环模式 + 当前曲红心）——岛只认 metadata，变化即推。
+  /// 与列表共用去抖（provider 任一变化都会触发 _push）；值没变就不推。
+  void _pushState(PlayerProvider player, FavoritesProvider favorites) {
+    final loopMode = player.roomPlayModeValue;
+    final song = player.currentSong;
+    final isFav = song == null ? null : favorites.favoriteIds.contains(song.id);
+    if (loopMode == _lastLoopMode && isFav == _lastIsFav) return;
+    _lastLoopMode = loopMode;
+    _lastIsFav = isFav;
+    debugPrint('[VivoMixSync] pushState: loop=$loopMode isFav=$isFav');
+    // ignore: discarded_futures
+    MediaNotificationService.updateVivoMixState(
+        loopMode: loopMode, isFav: isFav);
   }
 
   String _fingerprint(List<Song> songs) =>

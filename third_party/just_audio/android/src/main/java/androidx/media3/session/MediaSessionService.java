@@ -338,6 +338,30 @@ public abstract class MediaSessionService extends Service {
   }
 
   /**
+   * MD3Music fork v48：通知 legacy 浏览订阅方指定父节点的 children 已变化。
+   *
+   * <p>vivo 原子随身听订阅三棵列表树（vivomusicmix_current/favorite/local_list）后，
+   * 内容更新若不 {@code notifyChildrenChanged}，岛端会一直显示订阅时刻的旧列表
+   * （melodist 参考实现每次列表变化都通知）。内部投递到主线程执行；未订阅时为
+   * no-op，任意调用方安全。
+   */
+  public void notifyLegacyChildrenChanged(String parentId) {
+    synchronized (lock) {
+      for (MediaSession session : sessions.values()) {
+        MediaSessionImpl sessionImpl = session.getImpl();
+        if (sessionImpl != null) {
+          @Nullable MediaSessionServiceLegacyStub stub = sessionImpl.getLegacyBrowserService();
+          if (stub != null) {
+            postOrRun(
+                mainHandler,
+                () -> stub.notifyChildrenChanged(parentId));
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Removes a {@link MediaSession} from this service. This is not necessary for most media apps.
    * See <a href="#MultipleSessions">Supporting Multiple Sessions</a> for details.
    *

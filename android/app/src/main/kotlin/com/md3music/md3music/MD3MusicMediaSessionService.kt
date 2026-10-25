@@ -65,6 +65,8 @@ class MD3MusicMediaSessionService : MediaSessionService() {
                 if (mediaId.isNullOrEmpty()) {
                     false
                 } else {
+                    // v48：进环日志——岛端点播是否到达原生，下次诊断包直接可判。
+                    RingLog.i("CarAutoResume", "vivoMixPlayHook mediaId=$mediaId")
                     // v41：当前播放树的 mediaId 是 `title|artist` 口径（与岛高亮
                     // 匹配一致），不带来源前缀——含 '|' 的也一并拦截；其余按前缀。
                     val starts = mediaId.startsWith(VivoMixLibrary.SOURCE_CURRENT + ":") ||
@@ -88,6 +90,12 @@ class MD3MusicMediaSessionService : MediaSessionService() {
             }
         // 注册为 fork 的会话 host：fork 创建/已有活跃会话后 addSession 到本服务渲染通知
         AudioPlayer.setMediaSessionServiceHost(this)
+        // MD3Music fork v48：列表内容变化通知——Dart 推新快照后通知已订阅的岛端
+        // 刷新（melodist 参考实现同款；不通知则岛一直显示推送前的旧列表/空列表）。
+        // notifyLegacyChildrenChanged 内部投主线程，任意线程调用安全。
+        VivoMixLibrary.childrenChangedNotifier = { parentId ->
+            notifyLegacyChildrenChanged(parentId)
+        }
         // MD3Music fork v21（连车拉起）：读取外部绑定时自动拉起+续播的开关
         autoWakeEnabled = try {
             getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -250,8 +258,12 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // MD3Music fork v45：原子随身听循环模式——岛若以 service intent 直发
         // PLAY_MODE（部分 ROM 路径），这里转发 APS（正常路径走 media3
         // onCustomCommand，已在 AudioPlayer 侧拦截）。
+        // v48：协议 extras 用 Long 装 LOOP_MODE——getIntExtra 读 Long 拿默认值，
+        // 按 Number 容忍两种类型。
         if (intent?.action == AudioPlayer.VMM_ACTION_PLAY_MODE) {
-            val mode = intent.getIntExtra(AudioPlayer.VMM_KEY_LOOP_MODE, 1)
+            val modeRaw = intent.extras?.get(AudioPlayer.VMM_KEY_LOOP_MODE)
+            val mode = (modeRaw as? Number)?.toInt() ?: 1
+            RingLog.i("CarAutoResume", "PLAY_MODE intent 转发 mode=$mode")
             val forward = Intent(this, AudioPlaybackService::class.java)
                 .setAction(AudioPlaybackService.ACTION_VIVO_MIX_PLAY_MODE)
                 .putExtra(AudioPlaybackService.EXTRA_VIVO_MIX_PLAY_MODE, mode)
@@ -345,6 +357,10 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         AudioPlayer.setMediaSessionServiceHost(null)
         if (androidx.media3.session.MediaSessionService.playFromMediaIdHook === vivoMixPlayHook) {
             androidx.media3.session.MediaSessionService.playFromMediaIdHook = null
+        }
+        // v48：列表变化通知回调按 identity 清理（静态引用不得滞留旧实例）。
+        if (VivoMixLibrary.childrenChangedNotifier != null) {
+            VivoMixLibrary.childrenChangedNotifier = null
         }
         super.onDestroy()
     }

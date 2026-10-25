@@ -74,9 +74,25 @@ object VivoMixLibrary {
     @Volatile
     private var snapshot: Snapshot = Snapshot(emptyList(), emptyList(), emptyList())
 
-    /** Dart 推送到达时整体替换。 */
+    /**
+     * v48：列表内容变化通知回调（宿主 MSS 注入，onDestroy 按 identity 清理）。
+     * 岛订阅三棵树后内容更新必须 notifyChildrenChanged，否则一直显示订阅时刻
+     * 的旧列表（melodist 参考实现同款）。不可变快照整体替换，回调只报父节点 id。
+     */
+    @Volatile
+    var childrenChangedNotifier: ((String) -> Unit)? = null
+
+    /** Dart 推送到达时整体替换，并通知已订阅的岛端刷新。 */
     fun replace(currentItems: List<Item>, favoriteItems: List<Item>, localItems: List<Item>) {
         snapshot = Snapshot(currentItems, favoriteItems, localItems)
+        val notifier = childrenChangedNotifier ?: return
+        for (parent in listOf(PARENT_CURRENT, PARENT_FAVORITE, PARENT_LOCAL)) {
+            try {
+                notifier(parent)
+            } catch (_: Exception) {
+                // 通知失败不影响快照本身；岛端下次订阅自然拿到新内容。
+            }
+        }
     }
 
     fun currentList(): List<Item> = snapshot.current

@@ -190,7 +190,8 @@ class AudioPlaybackService : Service() {
             val favorites = parse("favorites", VivoMixLibrary.SOURCE_FAVORITE)
             val local = parse("local", VivoMixLibrary.SOURCE_LOCAL)
             VivoMixLibrary.replace(current, favorites, local)
-            Log.i(
+            // v48：进环日志（logcat 段在诊断导出中"尽力而为"常缺失，环形缓冲才可靠）。
+            RingLog.i(
                 TAG,
                 "vivo mix lists updated: current=${current.size} fav=${favorites.size} local=${local.size}"
             )
@@ -1223,9 +1224,17 @@ class AudioPlaybackService : Service() {
         try {
             AudioPlayer.setCustomActionListener(object : AudioPlayer.CustomActionListener {
                 override fun onToggleDesktopLyric() { handleAction(ACTION_TOGGLE_DESKTOP_LYRIC) }
-                override fun onToggleFavorite() { handleAction(ACTION_TOGGLE_FAVORITE) }
+                override fun onToggleFavorite() {
+                    // v48：进环日志——岛心形收藏 / 通知栏收藏按钮到达原生监听的实证。
+                    RingLog.i(TAG, "onToggleFavorite reached APS listener")
+                    handleAction(ACTION_TOGGLE_FAVORITE)
+                }
                 // MD3Music fork v45：原子随身听循环模式切换（岛 PLAY_MODE 命令）。
-                override fun onPlayMode(mode: Int) { dispatchVivoMixPlayMode(mode) }
+                override fun onPlayMode(mode: Int) {
+                    // v48：进环日志——命令过了 onConnect 授权门到达此处的实证。
+                    RingLog.i(TAG, "vivo mix PLAY_MODE reached APS listener mode=$mode")
+                    dispatchVivoMixPlayMode(mode)
+                }
                 override fun onPrevious() { handleMediaButtonCommand("previous") }
                 override fun onNext() { handleMediaButtonCommand("next") }
                 // MediaNotificationService 的切歌命令需要带 commandId 确认；复用媒体键队列
@@ -1235,7 +1244,7 @@ class AudioPlaybackService : Service() {
                     handleAction(ACTION_PAUSE)
                 }
             })
-            Log.i(TAG, "Media3 command listener registered")
+            RingLog.i(TAG, "Media3 command listener registered")
         } catch (_: Throwable) {}
     }
 
@@ -1500,9 +1509,10 @@ class AudioPlaybackService : Service() {
         if (mediaId.isNullOrEmpty()) return
         val engine = flutterEngine ?: staticFlutterEngine
         if (engine == null) {
-            Log.i(TAG, "vivo mix play dropped (no engine): $mediaId")
+            RingLog.i(TAG, "vivo mix play dropped (no engine): $mediaId")
             return
         }
+        RingLog.i(TAG, "vivo mix play -> Dart: $mediaId")
         MethodChannel(engine.dartExecutor.binaryMessenger, "com.md3music.md3music/floating_lyric")
             .invokeMethod("vivoMixPlay", mapOf("mediaId" to mediaId))
     }
@@ -1512,9 +1522,10 @@ class AudioPlaybackService : Service() {
     private fun dispatchVivoMixPlayMode(mode: Int) {
         val engine = flutterEngine ?: staticFlutterEngine
         if (engine == null) {
-            Log.i(TAG, "vivo mix play-mode dropped (no engine): $mode")
+            RingLog.i(TAG, "vivo mix play-mode dropped (no engine): $mode")
             return
         }
+        RingLog.i(TAG, "vivo mix play-mode -> Dart: $mode")
         runOnMainThread {
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,

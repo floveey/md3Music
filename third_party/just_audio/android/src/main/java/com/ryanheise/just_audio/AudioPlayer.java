@@ -1248,6 +1248,13 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                     // MD3Music fork: 让自定义命令（桌面歌词/收藏）对所有 controller 可用，
                     // 否则内部媒体通知 controller 的 customLayout 会把它们过滤成禁用/移除，
                     // 通知栏自定义按钮无法渲染（阶段4）。
+                    // MD3Music fork v48：Builder() 起底是空集——上面三个 add 会把默认全量
+                    // 授权替换成仅 3 条，导致 legacy 控制器（vivo 原子随身听等）的
+                    // setRating / PLAY_MODE 自定义命令在 MediaSessionLegacyStub 的
+                    // isSessionCommandAvailable 门被静默丢弃（真机实证：岛按钮不灰但点了
+                    // 无反应）。这里显式补两条岛链路必需命令：
+                    // - COMMAND_CODE_SESSION_SET_RATING：岛心形收藏（HeartRating）；
+                    // - VMM_ACTION_PLAY_MODE：岛循环模式切换（1=列表/2=单曲/3=随机）。
                     MediaSession.ConnectionResult.AcceptedResultBuilder builder =
                             new MediaSession.ConnectionResult.AcceptedResultBuilder(session);
                     androidx.media3.session.SessionCommands.Builder cmdBuilder =
@@ -1255,6 +1262,10 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                     cmdBuilder.add(CMD_TOGGLE_DESKTOP_LYRIC);
                     cmdBuilder.add(CMD_TOGGLE_FAVORITE);
                     cmdBuilder.add(CMD_TOGGLE_TRANSLATION);
+                    cmdBuilder.add(androidx.media3.session.SessionCommand
+                            .COMMAND_CODE_SESSION_SET_RATING);
+                    cmdBuilder.add(new androidx.media3.session.SessionCommand(
+                            VMM_ACTION_PLAY_MODE, new android.os.Bundle()));
                     builder.setAvailableSessionCommands(cmdBuilder.build());
                     return builder.build();
                 }
@@ -1313,8 +1324,12 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                             listener.onToggleFavorite();
                         } else if (VMM_ACTION_PLAY_MODE.equals(action)) {
                             // MD3Music fork v45：原子随身听循环模式切换。
-                            int mode = args != null
-                                    ? args.getInt(VMM_KEY_LOOP_MODE, 1) : 1;
+                            // v48：协议 extras 用 Long 装 LOOP_MODE——getInt 读 Long 拿 0，
+                            // 按 Number 取值容忍两种类型。
+                            android.os.Bundle modeArgs = args != null ? args : new android.os.Bundle();
+                            Object modeRaw = modeArgs.get(VMM_KEY_LOOP_MODE);
+                            int mode = modeRaw instanceof Number
+                                    ? ((Number) modeRaw).intValue() : 1;
                             android.util.Log.i("CardLyricLink",
                                     "onCustomCommand PLAY_MODE: " + mode);
                             listener.onPlayMode(mode);
@@ -2250,8 +2265,9 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             // MD3Music fork v45：原子随身听循环模式回写（extras → LegacyConversions
             // 拷为 framework 顶层键，岛据此渲染循环按钮状态：1=列表/2=单曲/3=随机）。
             // Bundle 是 final：不能用双花括号匿名子类，用局部变量装配。
+            // v48：协议口径是 Long（岛端 getLong 读 Int 会拿 0），putInt 改 putLong。
             android.os.Bundle loopExtras = new android.os.Bundle();
-            loopExtras.putInt(VMM_KEY_LOOP_MODE,
+            loopExtras.putLong(VMM_KEY_LOOP_MODE,
                     player.getShuffleModeEnabled() ? 3
                     : player.getRepeatMode() == androidx.media3.common.Player.REPEAT_MODE_ONE ? 2 : 1);
             androidx.media3.common.MediaMetadata withLoop =

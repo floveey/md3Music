@@ -55,6 +55,8 @@ class VivoMixSync {
     library.addListener(_schedule);
     MediaNotificationService.onVivoMixPlay = _handleVivoMixPlay;
     MediaNotificationService.onVivoMixPlayMode = _handleVivoMixPlayMode;
+    debugPrint('[VivoMixSync] attach: player=${player.hashCode} '
+        'fav=${favorites.hashCode} lib=${library.hashCode}');
     // 本地库默认懒加载（只有进"本地音乐"页才读）——主动补一次缓存读取，
     // 让"下载列表"树在冷启动后也有内容。
     unawaited(library.loadSavedSongs());
@@ -102,8 +104,14 @@ class VivoMixSync {
     final fingerprint = _fingerprint(currentSongs) + '|'
         + _fingerprint(favoriteSongs) + '|'
         + _fingerprint(localSongs);
-    if (fingerprint == _lastPayloadFingerprint) return;
+    if (fingerprint == _lastPayloadFingerprint) {
+      debugPrint('[VivoMixSync] push skipped: current=${currentSongs.length} '
+          'fav=${favoriteSongs.length} local=${localSongs.length}');
+      return;
+    }
     _lastPayloadFingerprint = fingerprint;
+    debugPrint('[VivoMixSync] push: current=${currentSongs.length} '
+        'fav=${favoriteSongs.length} local=${localSongs.length}');
 
     // ignore: discarded_futures
     MediaNotificationService.updateVivoMixLists(

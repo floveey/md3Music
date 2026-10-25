@@ -126,6 +126,9 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   /// v47：只看弹幕——隐藏右下角"发弹幕"按钮（设置页可调）。
   bool _readOnly = false;
 
+  /// v52：整体透明度（0.1~1.0，1.0=不透明）。
+  double _opacity = 1.0;
+
   /// 颜色镜像 → 覆盖色（-1=随机哨值 → null，由 _randomColor 承载）。
   static Color? _colorOf(int? value) =>
       value == null || value < 0 ? null : Color(value);
@@ -155,9 +158,11 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
     _overrideColor = _colorOf(SettingsRepository.songDanmakuColor.value);
     _randomColor = _isRandomColor(SettingsRepository.songDanmakuColor.value);
     _readOnly = SettingsRepository.songDanmakuReadOnly.value;
+    _opacity = SettingsRepository.songDanmakuOpacity.value;
     SettingsRepository.songDanmakuEnabled.addListener(_onSettingsChanged);
     SettingsRepository.songDanmakuSpeed.addListener(_onAppearanceChanged);
     SettingsRepository.songDanmakuColor.addListener(_onAppearanceChanged);
+    SettingsRepository.songDanmakuOpacity.addListener(_onAppearanceChanged);
     SettingsRepository.songDanmakuReadOnly.addListener(_onReadOnlyChanged);
     SongDanmakuHost.delivery.addListener(_onDelivery);
   }
@@ -169,13 +174,14 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
   }
 
   /// v46：速度/颜色变化只影响后续 spawn 与绘制步长——setState 刷新传参即可。
-  /// v49：颜色镜像 -1 哨值 = 随机色。
+  /// v49：颜色镜像 -1 哨值 = 随机色。v52：透明度同口径。
   void _onAppearanceChanged() {
     if (!mounted) return;
     setState(() {
       _speedScale = SettingsRepository.songDanmakuSpeed.value;
       _overrideColor = _colorOf(SettingsRepository.songDanmakuColor.value);
       _randomColor = _isRandomColor(SettingsRepository.songDanmakuColor.value);
+      _opacity = SettingsRepository.songDanmakuOpacity.value;
     });
   }
 
@@ -216,6 +222,7 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
     SettingsRepository.songDanmakuEnabled.removeListener(_onSettingsChanged);
     SettingsRepository.songDanmakuSpeed.removeListener(_onAppearanceChanged);
     SettingsRepository.songDanmakuColor.removeListener(_onAppearanceChanged);
+    SettingsRepository.songDanmakuOpacity.removeListener(_onAppearanceChanged);
     SettingsRepository.songDanmakuReadOnly.removeListener(_onReadOnlyChanged);
     SongDanmakuHost.delivery.removeListener(_onDelivery);
     _player?.positionNotifier.removeListener(_onPositionSample);
@@ -446,10 +453,12 @@ class _SongDanmakuHostState extends State<SongDanmakuHost> {
             child: ScrollDanmakuLayer(
               controller: _danmaku,
               highlightColor: colorScheme.primary,
-              // v46：速度倍率与颜色覆盖（设置页可调）；v49：随机色模式。
+              // v46：速度倍率与颜色覆盖（设置页可调）；v49：随机色模式；
+              // v52：整体透明度。
               speed: 120 * _speedScale,
               overrideColor: _overrideColor,
               randomColor: _randomColor,
+              opacity: _opacity,
             ),
           ),
         ),

@@ -4806,6 +4806,31 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                     ),
                   ),
                 if (enabled)
+                  // search: 弹幕 透明度 浓度
+                  ValueListenableBuilder<double>(
+                    valueListenable: SettingsRepository.songDanmakuOpacity,
+                    builder: (context, opacity, _) => ListTile(
+                      leading: Icon(Icons.opacity_outlined,
+                          color: colorScheme.primary),
+                      title: const Text('弹幕透明度'),
+                      subtitle: M3ESlider(
+                        decoration: const M3ESliderDecoration(
+                          haptic: M3EHapticFeedback.medium,
+                        ),
+                        value: opacity,
+                        min: 0.1,
+                        max: 1.0,
+                        divisions: 18,
+                        label: '${(opacity * 100).round()}%',
+                        // 拖动只刷内存镜像（宿主即时生效），松手才落盘（本仓滑条惯例）。
+                        onChanged: (v) =>
+                            SettingsRepository.songDanmakuOpacity.value = v,
+                        onChangeEnd: (v) =>
+                            _settingsRepository.setSongDanmakuOpacity(v),
+                      ),
+                    ),
+                  ),
+                if (enabled)
                   // search: 弹幕 颜色 随机 彩色
                   ValueListenableBuilder<int?>(
                     valueListenable: SettingsRepository.songDanmakuColor,

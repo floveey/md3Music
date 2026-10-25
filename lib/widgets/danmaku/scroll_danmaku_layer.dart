@@ -28,6 +28,9 @@ class ScrollDanmakuLayer extends StatefulWidget {
     this.overrideColor,
     // MD3Music fork v49：随机颜色——每条弹幕从固定调色板随机取色。
     this.randomColor = false,
+    // MD3Music fork v52：整体透明度（0.1~1.0，spawn 时乘进颜色 alpha，
+    // 只影响后续 spawn——口径同颜色覆盖，场上旧条目几秒内自然替换）。
+    this.opacity = 1.0,
   });
 
   /// 弹幕的投放/清空/运行态由外部通过它控制（与 `canvas_danmaku` 的
@@ -55,6 +58,9 @@ class ScrollDanmakuLayer extends StatefulWidget {
   /// MD3Music fork v49：随机颜色——每条弹幕从 [_randomPalette] 随机取色
   /// （自己发送的仍用高亮色）。与 [overrideColor] 互斥，本标志优先。
   final bool randomColor;
+
+  /// MD3Music fork v52：整体透明度（0.1~1.0，1.0=不透明）。
+  final double opacity;
 
   @override
   State<ScrollDanmakuLayer> createState() => _ScrollDanmakuLayerState();
@@ -216,11 +222,14 @@ class _ScrollDanmakuLayerState extends State<ScrollDanmakuLayer> {
     final fontSize = scaler.scale(widget.fontSize);
     // v46：overrideColor 非空时覆盖弹幕池颜色（自己发送的仍用高亮色）。
     // v49：randomColor 模式每条从调色板随机取色（优先于 overrideColor）。
-    final color = entry.selfSend
+    // v52：opacity 乘进颜色 alpha（含描边），spawn 一次计算、绘制零开销。
+    final baseColor = entry.selfSend
         ? widget.highlightColor
         : (widget.randomColor
             ? _randomPalette[_random.nextInt(_randomPalette.length)]
             : (widget.overrideColor ?? entry.color));
+    final color =
+        widget.opacity >= 1.0 ? baseColor : baseColor.withValues(alpha: baseColor.a * widget.opacity);
     final style = TextStyle(
       fontSize: fontSize,
       fontWeight: FontWeight.w500,
@@ -238,7 +247,8 @@ class _ScrollDanmakuLayerState extends State<ScrollDanmakuLayer> {
           foreground: Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = widget.strokeWidth
-            ..color = Colors.black.withValues(alpha: 0.55),
+            ..color = Colors.black.withValues(
+                alpha: 0.55 * widget.opacity.clamp(0.0, 1.0)),
         ),
       ),
       textDirection: TextDirection.ltr,

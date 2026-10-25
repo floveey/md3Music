@@ -47,6 +47,8 @@ class SettingsRepository {
   static const String _keySongDanmakuColor = 'settings_song_danmaku_color';
   // MD3Music fork v47：只看弹幕（隐藏播放页"发弹幕"按钮）。
   static const String _keySongDanmakuReadOnly = 'settings_song_danmaku_read_only';
+  // MD3Music fork v52：歌曲弹幕透明度（0.1~1.0，1.0=不透明）。
+  static const String _keySongDanmakuOpacity = 'settings_song_danmaku_opacity';
 
   /// 封面流歌单源（CoverFlowSource.rawValue：'daily' / 'personalFm' / 'homeDiscover'）。
   /// 存原始字符串而非 int 下标：枚举顺序是 UI 契约，持久化不跟它走。
@@ -546,6 +548,25 @@ class SettingsRepository {
     songDanmakuReadOnly.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keySongDanmakuReadOnly, value);
+  }
+
+  /// MD3Music fork v52：歌曲弹幕透明度（0.1~1.0，1.0=不透明；对齐 MV 弹幕
+  /// 透明度区间）。静态镜像供播放页即时生效（同速度/颜色模式）。
+  static final ValueNotifier<double> songDanmakuOpacity =
+      ValueNotifier<double>(1.0);
+
+  Future<double> getSongDanmakuOpacity() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = (prefs.getDouble(_keySongDanmakuOpacity) ?? 1.0).clamp(0.1, 1.0);
+    songDanmakuOpacity.value = v;
+    return v;
+  }
+
+  Future<void> setSongDanmakuOpacity(double value) async {
+    final v = value.clamp(0.1, 1.0);
+    songDanmakuOpacity.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keySongDanmakuOpacity, v);
   }
 
   /// 「听歌数据云同步」总开关，默认开启。

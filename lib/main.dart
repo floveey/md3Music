@@ -424,6 +424,7 @@ Future<void> _restoreSongDanmakuPref() async {
       settings.getSongDanmakuSpeed(),
       settings.getSongDanmakuColor(),
       settings.getSongDanmakuReadOnly(),
+      settings.getSongDanmakuOpacity(),
     ]);
   } catch (_) {}
 }

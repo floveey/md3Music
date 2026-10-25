@@ -4757,6 +4757,40 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
             await _settingsRepository.setMvDanmakuEnabled(v);
           },
         ),
+        // MV 弹幕透明度：弹幕关闭时不显示（无可调对象）。
+        // v53：从歌曲弹幕组后面挪到 MV 开关紧后——MV 的开关与设置连续，
+        // 不被歌曲弹幕组隔开（用户反馈的分组调整）。
+        if (_mvDanmakuEnabled)
+          // search: 弹幕透明度 弹幕 浓度
+          ListTile(
+            leading: Icon(Icons.opacity_outlined, color: colorScheme.primary),
+            title: const Text('弹幕透明度'),
+            // tv: TV 构建换 RemoteSlider（P-C）
+            subtitle: kTvBuild
+                ? RemoteSlider(
+                    value: _mvDanmakuOpacity,
+                    min: 0.1,
+                    max: 1.0,
+                    divisions: 9,
+                    label: '${(_mvDanmakuOpacity * 100).round()}%',
+                    onChanged: (v) => setState(() => _mvDanmakuOpacity = v),
+                    onChangeEnd: (v) => _settingsRepository.setMvDanmakuOpacity(v),
+                  )
+                : M3ESlider(
+                    decoration: const M3ESliderDecoration(
+                      haptic: M3EHapticFeedback.medium,
+                    ),
+                    value: _mvDanmakuOpacity,
+                    min: 0.1,
+                    max: 1.0,
+                    divisions: 9,
+                    label: '${(_mvDanmakuOpacity * 100).round()}%',
+                    // 拖动只改本地状态；松手才落盘，避免拖动过程中反复写 SharedPreferences
+                    onChanged: (v) => setState(() => _mvDanmakuOpacity = v),
+                    onChangeEnd: (v) => _settingsRepository.setMvDanmakuOpacity(v),
+                  ),
+            trailing: _statusText('${(_mvDanmakuOpacity * 100).round()}%'),
+          ),
         // 歌曲弹幕：控制是否在播放页叠加弹幕层（TV 无文本输入能力，不编入 TV 包）
         // search: 歌曲 弹幕 播放页 封面 滚动
         // v46：改 ValueListenableBuilder（同一静态镜像）——本地 setState +
@@ -4862,38 +4896,6 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                   ),
               ],
             ),
-          ),
-        // MV 弹幕透明度：弹幕关闭时不显示（无可调对象）
-        if (_mvDanmakuEnabled)
-          // search: 弹幕透明度 弹幕 浓度
-          ListTile(
-            leading: Icon(Icons.opacity_outlined, color: colorScheme.primary),
-            title: const Text('弹幕透明度'),
-            // tv: TV 构建换 RemoteSlider（P-C）
-            subtitle: kTvBuild
-                ? RemoteSlider(
-                    value: _mvDanmakuOpacity,
-                    min: 0.1,
-                    max: 1.0,
-                    divisions: 9,
-                    label: '${(_mvDanmakuOpacity * 100).round()}%',
-                    onChanged: (v) => setState(() => _mvDanmakuOpacity = v),
-                    onChangeEnd: (v) => _settingsRepository.setMvDanmakuOpacity(v),
-                  )
-                : M3ESlider(
-                    decoration: const M3ESliderDecoration(
-                      haptic: M3EHapticFeedback.medium,
-                    ),
-                    value: _mvDanmakuOpacity,
-                    min: 0.1,
-                    max: 1.0,
-                    divisions: 9,
-                    label: '${(_mvDanmakuOpacity * 100).round()}%',
-                    // 拖动只改本地状态；松手才落盘，避免拖动过程中反复写 SharedPreferences
-                    onChanged: (v) => setState(() => _mvDanmakuOpacity = v),
-                    onChangeEnd: (v) => _settingsRepository.setMvDanmakuOpacity(v),
-                  ),
-            trailing: _statusText('${(_mvDanmakuOpacity * 100).round()}%'),
           ),
       ],
     );

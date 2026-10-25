@@ -2167,6 +2167,28 @@ class _AmStyleFullPlayerState extends State<AmStyleFullPlayer>
                       : const SizedBox.shrink(),
                 ),
               ),
+            // MD3Music fork v51：宽屏写真生效时封面盒不渲染，弹幕宿主随之消失
+            // （真机实测：横屏开歌手写真无弹幕，竖屏正常——竖屏封面 tab 的
+            // 封面盒仍在）。在写真层之上补一个左栏区域（与写真
+            // photoWidthFraction 同宽）的弹幕层；写真关闭时封面盒路径自带
+            // 弹幕，两层互斥不会双份。不套 IgnorePointer：弹幕绘制层本身无
+            // 手势，右下角"发弹幕"按钮需要可点（与竖屏行为一致）。
+            if (getScreenType(MediaQuery.sizeOf(context).width) !=
+                ScreenType.compact)
+              Positioned.fill(
+                child: ListenableBuilder(
+                  listenable: _photoController,
+                  builder: (context, _) => _photoCoverActive
+                      ? FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 0.4,
+                          child: const SongDanmakuHost(
+                            cover: SizedBox.expand(),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
             // 3.5 频谱背景层：style=2 时显示底部条形频谱图（播放时淡入、暂停时淡出）
             if (_spectrumEnabled && _spectrumStyle == 2)
               SpectrumBackground(

@@ -1342,6 +1342,11 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 // HeartRating，转发 App 自有收藏切换（此前未覆写 → 岛报
                 // ERROR_NOT_SUPPORTED，心形点击无反应）。HeartRating 是
                 // androidx.media3.common 的顶级类（非 Rating 嵌套类）。
+                // v50 修复"只能收藏不能取消"：旧条件 isHeart()==true 才转发，
+                // 岛发的取消（heart=false）被静默丢弃。岛发的是目标态，App 侧
+                // 是 toggle——与 Dart 推送的当前镜像（sVivoFavHeart）不一致才
+                // 切一次，一致则 no-op（岛状态过期时防误切）；镜像未知(null)
+                // 时尽力切换。
                 @Override
                 public ListenableFuture<SessionResult> onSetRating(
                         MediaSession session, MediaSession.ControllerInfo controller,
@@ -1350,9 +1355,12 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                     android.util.Log.i("CardLyricLink",
                             "onSetRating: " + rating);
                     if (listener != null
-                            && rating instanceof androidx.media3.common.HeartRating
-                            && ((androidx.media3.common.HeartRating) rating).isHeart()) {
-                        listener.onToggleFavorite();
+                            && rating instanceof androidx.media3.common.HeartRating) {
+                        boolean want = ((androidx.media3.common.HeartRating) rating).isHeart();
+                        Boolean current = sVivoFavHeart;
+                        if (current == null || current != want) {
+                            listener.onToggleFavorite();
+                        }
                     }
                     return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
                 }

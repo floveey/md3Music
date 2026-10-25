@@ -111,6 +111,11 @@ class VivoMixSync {
     // v50：状态回显必须在指纹闸门**之前**——切循环模式/红心时列表指纹不变，
     // 放在闸门后会被提前 return 吞掉（岛上按钮状态就永远不更新）。
     _pushState(player, favorites);
+    // v51：冷启动队列/收藏未恢复时的全空快照不推——岛会先拉到空树显示
+    // "暂无歌曲"，队列就绪的下一份推送又刷回（真机实测偶现抖动）。
+    if (currentSongs.isEmpty && favoriteSongs.isEmpty && localSongs.isEmpty) {
+      return;
+    }
     if (fingerprint == _lastPayloadFingerprint) {
       debugPrint('[VivoMixSync] push skipped: current=${currentSongs.length} '
           'fav=${favoriteSongs.length} local=${localSongs.length}');

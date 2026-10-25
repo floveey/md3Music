@@ -804,6 +804,15 @@ import java.util.concurrent.TimeoutException;
     // 原子随身听（合作控制器路径）原样读取。
     if (isVivoFamily()) {
       builder.putLong(VMM_SUPPORT_EVENT_KEY, VMM_SUPPORT_EVENT_VALUE);
+      // MD3Music fork v51：LOOP_MODE 顶层双写。extras 拷贝路径真机实测岛读不到
+      // （v50 诊断包：同一份 metadata 里 RATING（预定义键）岛读到了、LOOP_MODE
+      // （extras 键）恒读 0 → 岛循环按钮每次发同一档）。与 support_event 同走
+      // 顶层键（该路径已实证可达岛：能力位生效）。值取 Dart 推送的权威状态，
+      // 0=未推送不写。
+      int vmmLoop = com.ryanheise.just_audio.AudioPlayer.sVivoLoopMode;
+      if (vmmLoop >= 1) {
+        builder.putLong("vivomusicmix.media.metadata.LOOP_MODE", vmmLoop);
+      }
     }
 
     if (metadata.extras != null) {

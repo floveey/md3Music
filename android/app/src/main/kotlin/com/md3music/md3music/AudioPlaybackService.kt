@@ -2531,6 +2531,18 @@ class AudioPlaybackService : Service() {
         // MainPanelItemViewHolder 会先 setCover(null) 并在 flip 动画中吞掉后续补帧，
         // 导致封面永远停在无封面。改为封面加载成功后再一次性 setMetadata(带 bitmap)，
         // 使 SystemUI 首次拿到 metadata 即带封面；仅封面失败/无源时才发无封面兜底。
+        // v62 再调整（岛高亮滞后真机实证）：上面 P0 让 title|artist 身份（岛高亮/
+        // 锁屏/控制中心切歌显示）滞后到封面网络加载完成（数秒）。现在切歌时**立即
+        // 先发一次 title|artist 的轻量 metadata**（不带 bitmap），封面加载完成后再
+        // 二次 updateActiveSessionMetadata 补全 bitmap——两发合并，仍满足 P0 的
+        // "首帧即封面"口径（第一发只到 title/artist，封面位空）。若 SystemUI 出现
+        // "控制中心封面闪空后不再补全"的老病，回滚本段即可。
+        if (!isMetadataRequestCurrent(requestMediaId, requestGeneration)) {
+            // 已是旧请求：连轻量首帧都不必发。
+        } else {
+            AudioPlayer.updateActiveSessionTitleArtist(
+                requestMediaId, requestGeneration, displayTitle, displayArtist)
+        }
         if (!effectiveArtUrl.isNullOrEmpty()) {
             Log.d(TAG, "触发后台封面加载 effectiveArtUrl=$effectiveArtUrl fallback=$fallbackFilePath")
             Thread {

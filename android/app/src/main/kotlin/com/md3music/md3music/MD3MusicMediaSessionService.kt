@@ -96,6 +96,14 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         VivoMixLibrary.childrenChangedNotifier = { parentId ->
             notifyLegacyChildrenChanged(parentId)
         }
+        // MD3Music fork v57：点播到达性观测——stub 收到岛 playFromMediaId 即进环，
+        // 配合 hook 内的 vivoMixPlayHook 面包屑做"岛发了没 / 到了多少"两级判定。
+        vivoMixPlayRingObserver =
+            java.util.function.Consumer { mediaId ->
+                RingLog.i("CarAutoResume", "stub onPlayFromMediaId mediaId=$mediaId")
+            }
+        androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver =
+            vivoMixPlayRingObserver
         // MD3Music fork v21（连车拉起）：读取外部绑定时自动拉起+续播的开关
         autoWakeEnabled = try {
             getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -353,10 +361,20 @@ class MD3MusicMediaSessionService : MediaSessionService() {
     private var vivoMixPlayHook: androidx.media3.session.MediaSessionService.PlayFromMediaIdHook? =
         null
 
+    /** v57：点播到达性观测字段（onDestroy 按 identity 清理）。 */
+    private var vivoMixPlayRingObserver: java.util.function.Consumer<String>? = null
+
     override fun onDestroy() {
         AudioPlayer.setMediaSessionServiceHost(null)
         if (androidx.media3.session.MediaSessionService.playFromMediaIdHook === vivoMixPlayHook) {
             androidx.media3.session.MediaSessionService.playFromMediaIdHook = null
+        }
+        // v57：观测回调按 identity 清理（同 hook 模式，静态引用不得滞留旧实例）。
+        if (androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver ===
+            vivoMixPlayRingObserver
+        ) {
+            androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver =
+                null
         }
         // v48：列表变化通知回调按 identity 清理（静态引用不得滞留旧实例）。
         if (VivoMixLibrary.childrenChangedNotifier != null) {

@@ -492,15 +492,15 @@ class SettingsRepository {
     await prefs.setBool(_keySongDanmakuEnabled, value);
   }
 
-  /// MD3Music fork v46：歌曲弹幕速度倍率（0.5~2.0，1.0=默认）。静态镜像供
+  /// MD3Music fork v46：歌曲弹幕速度倍率（0.5~2.0）。静态镜像供
   /// 播放页即时生效（同 songDanmakuEnabled 模式：getter 读盘回填、setter
-  /// 写盘前先更新）。
+  /// 写盘前先更新）。v59：默认改 0.5（用户拍板的口径）。
   static final ValueNotifier<double> songDanmakuSpeed =
-      ValueNotifier<double>(1.0);
+      ValueNotifier<double>(0.5);
 
   Future<double> getSongDanmakuSpeed() async {
     final prefs = await SharedPreferences.getInstance();
-    final v = (prefs.getDouble(_keySongDanmakuSpeed) ?? 1.0).clamp(0.5, 2.0);
+    final v = (prefs.getDouble(_keySongDanmakuSpeed) ?? 0.5).clamp(0.5, 2.0);
     songDanmakuSpeed.value = v;
     return v;
   }
@@ -556,14 +556,14 @@ class SettingsRepository {
     await prefs.setBool(_keySongDanmakuReadOnly, value);
   }
 
-  /// MD3Music fork v52：歌曲弹幕透明度（0.1~1.0，1.0=不透明；对齐 MV 弹幕
-  /// 透明度区间）。静态镜像供播放页即时生效（同速度/颜色模式）。
+  /// MD3Music fork v52：歌曲弹幕透明度（0.1~1.0；1.0=不透明）。
+  /// v59：默认改 0.8（用户拍板的口径）。
   static final ValueNotifier<double> songDanmakuOpacity =
-      ValueNotifier<double>(1.0);
+      ValueNotifier<double>(0.8);
 
   Future<double> getSongDanmakuOpacity() async {
     final prefs = await SharedPreferences.getInstance();
-    final v = (prefs.getDouble(_keySongDanmakuOpacity) ?? 1.0).clamp(0.1, 1.0);
+    final v = (prefs.getDouble(_keySongDanmakuOpacity) ?? 0.8).clamp(0.1, 1.0);
     songDanmakuOpacity.value = v;
     return v;
   }

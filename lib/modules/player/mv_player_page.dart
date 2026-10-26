@@ -109,6 +109,12 @@ class _MvPlayerPageState extends State<MvPlayerPage> {
   /// 弹幕总透明度（读取自设置，默认 1.0）。
   double _danmakuOpacity = 1.0;
 
+  /// v54：MV 弹幕颜色哨值解析（同歌曲弹幕口径：null=跟随弹幕池，-1=随机）。
+  static Color? _mvColorOf(int? value) =>
+      value == null || value < 0 ? null : Color(value);
+
+  static bool _mvIsRandomColor(int? value) => value != null && value < 0;
+
   /// 本地弹幕仓储，用于持久化用户发送的弹幕。
   LocalDanmakuStore? _danmakuStore;
 
@@ -192,6 +198,10 @@ class _MvPlayerPageState extends State<MvPlayerPage> {
       if (!mounted) return;
       setState(() => _danmakuOpacity = opacity);
     });
+    // v54：MV 弹幕速度/颜色镜像回填（getter 读盘回填静态镜像；build 处
+    // ListenableBuilder 直接读镜像实时生效）。
+    unawaited(SettingsRepository().getMvDanmakuSpeed());
+    unawaited(SettingsRepository().getMvDanmakuColor());
     _loadMv();
   }
 
@@ -959,14 +969,27 @@ class _MvPlayerPageState extends State<MvPlayerPage> {
           // 弹幕层：位于 Chewie 之上、手势透传（IgnorePointer 在层内）。
           // key 绑定 controller 实例 —— 切换清晰度会重建控制器，必须随之重建，
           // 否则 Ticker 会继续读已 dispose 的控制器。
+          // v54：速度/颜色走静态镜像（设置页改动实时生效，速度变化重建
+          // 渲染缓存——设置页低频操作，可接受）。
           if (_controller != null && _chewieController != null)
-            MvDanmakuLayer(
-              key: ObjectKey(_controller),
-              controller: _controller!,
-              entries: _danmakuEntries,
-              enabled: _danmakuEnabled.value,
-              opacity: _danmakuOpacity,
-              onControllerCreated: (c) => _danmakuController = c,
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                SettingsRepository.mvDanmakuSpeed,
+                SettingsRepository.mvDanmakuColor,
+              ]),
+              builder: (context, _) => MvDanmakuLayer(
+                key: ObjectKey(_controller),
+                controller: _controller!,
+                entries: _danmakuEntries,
+                enabled: _danmakuEnabled.value,
+                opacity: _danmakuOpacity,
+                speedScale: SettingsRepository.mvDanmakuSpeed.value,
+                overrideColor: _mvColorOf(
+                    SettingsRepository.mvDanmakuColor.value),
+                randomColor:
+                    _mvIsRandomColor(SettingsRepository.mvDanmakuColor.value),
+                onControllerCreated: (c) => _danmakuController = c,
+              ),
             ),
           // 右上角按钮组：弹幕开关 / 全屏 / （非全屏时）画中画
           if (_chewieController != null)

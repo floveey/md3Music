@@ -49,6 +49,9 @@ class SettingsRepository {
   static const String _keySongDanmakuReadOnly = 'settings_song_danmaku_read_only';
   // MD3Music fork v52：歌曲弹幕透明度（0.1~1.0，1.0=不透明）。
   static const String _keySongDanmakuOpacity = 'settings_song_danmaku_opacity';
+  // MD3Music fork v54：MV 弹幕速度与颜色。
+  static const String _keyMvDanmakuSpeed = 'settings_mv_danmaku_speed';
+  static const String _keyMvDanmakuColor = 'settings_mv_danmaku_color';
 
   /// 封面流歌单源（CoverFlowSource.rawValue：'daily' / 'personalFm' / 'homeDiscover'）。
   /// 存原始字符串而非 int 下标：枚举顺序是 UI 契约，持久化不跟它走。
@@ -517,7 +520,9 @@ class SettingsRepository {
   Future<int?> getSongDanmakuColor() async {
     final prefs = await SharedPreferences.getInstance();
     final hasColor = prefs.containsKey(_keySongDanmakuColor);
-    final v = hasColor ? prefs.getInt(_keySongDanmakuColor) : null;
+    // v54：未设置时默认随机（-1 哨值）——用户此前拍板的默认口径；显式选过
+    // 任何档位（含跟随=null）的老用户不受影响。
+    final v = hasColor ? prefs.getInt(_keySongDanmakuColor) : -1;
     songDanmakuColor.value = v;
     return v;
   }
@@ -567,6 +572,47 @@ class SettingsRepository {
     songDanmakuOpacity.value = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keySongDanmakuOpacity, v);
+  }
+
+  /// MD3Music fork v54：MV 弹幕速度倍率（0.5~2.0，1.0=默认时长 10s）与
+  /// 颜色（int ARGB；-1=随机哨值，null=跟随弹幕池；默认随机）。静态镜像
+  /// 同歌曲弹幕组模式。
+  static final ValueNotifier<double> mvDanmakuSpeed =
+      ValueNotifier<double>(1.0);
+
+  static final ValueNotifier<int?> mvDanmakuColor =
+      ValueNotifier<int?>(-1);
+
+  Future<double> getMvDanmakuSpeed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = (prefs.getDouble(_keyMvDanmakuSpeed) ?? 1.0).clamp(0.5, 2.0);
+    mvDanmakuSpeed.value = v;
+    return v;
+  }
+
+  Future<void> setMvDanmakuSpeed(double value) async {
+    final v = value.clamp(0.5, 2.0);
+    mvDanmakuSpeed.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyMvDanmakuSpeed, v);
+  }
+
+  Future<int?> getMvDanmakuColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasColor = prefs.containsKey(_keyMvDanmakuColor);
+    final v = hasColor ? prefs.getInt(_keyMvDanmakuColor) : -1;
+    mvDanmakuColor.value = v;
+    return v;
+  }
+
+  Future<void> setMvDanmakuColor(int? value) async {
+    mvDanmakuColor.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    if (value == null) {
+      await prefs.remove(_keyMvDanmakuColor);
+    } else {
+      await prefs.setInt(_keyMvDanmakuColor, value);
+    }
   }
 
   /// 「听歌数据云同步」总开关，默认开启。

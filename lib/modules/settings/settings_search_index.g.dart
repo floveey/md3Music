@@ -120,6 +120,8 @@ const List<({String label, String category, String subpage, String aliases})>
   (label: '播放时保持屏幕常亮', category: '播放', subpage: '屏幕与视频', aliases: '屏幕常亮 常亮 息屏'),
   (label: '播放 MV 时自动画中画', category: '播放', subpage: '屏幕与视频', aliases: '画中画 pip 悬浮'),
   (label: '显示 MV 弹幕', category: '播放', subpage: '屏幕与视频', aliases: 'MV 弹幕 弹幕 视频 滚动'),
+  (label: 'MV 弹幕速度', category: '播放', subpage: '屏幕与视频', aliases: 'MV 弹幕 速度 快慢 倍率'),
+  (label: 'MV 弹幕颜色', category: '播放', subpage: '屏幕与视频', aliases: 'MV 弹幕 颜色 随机 彩色'),
   (label: '显示歌曲弹幕', category: '播放', subpage: '屏幕与视频', aliases: '歌曲 弹幕 播放页 封面 滚动'),
   (label: '弹幕速度', category: '播放', subpage: '屏幕与视频', aliases: '弹幕 速度 快慢 慢速 快速 滚动 倍率'),
   (label: '弹幕颜色', category: '播放', subpage: '屏幕与视频', aliases: '弹幕 颜色 随机 彩色 换色'),

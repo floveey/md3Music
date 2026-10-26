@@ -425,6 +425,9 @@ Future<void> _restoreSongDanmakuPref() async {
       settings.getSongDanmakuColor(),
       settings.getSongDanmakuReadOnly(),
       settings.getSongDanmakuOpacity(),
+      // v54：MV 弹幕速度/颜色镜像同批回填。
+      settings.getMvDanmakuSpeed(),
+      settings.getMvDanmakuColor(),
     ]);
   } catch (_) {}
 }

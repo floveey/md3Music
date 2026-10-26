@@ -5,6 +5,19 @@ import 'package:flutter/material.dart';
 import '../../core/danmaku/danmaku_entry.dart';
 import '../../core/services/player_frame_driver.dart';
 
+/// v54：随机颜色调色板（v49 起用于歌曲弹幕，提升为顶层常量供 MV 弹幕共用；
+/// 可读性优先，压在封面/视频上仍清晰）。
+const List<Color> kDanmakuRandomPalette = <Color>[
+  Color(0xFFFFFFFF), // 白
+  Color(0xFFFFD54F), // 浅黄
+  Color(0xFF80DEEA), // 浅青
+  Color(0xFFA5D6A7), // 浅绿
+  Color(0xFFFFCC80), // 浅橙
+  Color(0xFFF48FB1), // 浅粉
+  Color(0xFFCE93D8), // 浅紫
+  Color(0xFF90CAF9), // 浅蓝
+];
+
 /// 滚动弹幕绘制层（自绘，**不用 canvas_danmaku**）。
 ///
 /// 为什么自绘：`canvas_danmaku` 的 `DanmakuScreen` 自带一个跟 vsync 跑的 `Ticker`
@@ -183,16 +196,7 @@ class _ScrollDanmakuLayerState extends State<ScrollDanmakuLayer> {
   int _laneCount = 0;
 
   /// v49：随机颜色调色板（可读性优先，压在封面上仍清晰）与取色器。
-  static const List<Color> _randomPalette = <Color>[
-    Color(0xFFFFFFFF), // 白
-    Color(0xFFFFD54F), // 浅黄
-    Color(0xFF80DEEA), // 浅青
-    Color(0xFFA5D6A7), // 浅绿
-    Color(0xFFFFCC80), // 浅橙
-    Color(0xFFF48FB1), // 浅粉
-    Color(0xFFCE93D8), // 浅紫
-    Color(0xFF90CAF9), // 浅蓝
-  ];
+  /// v54：提升为顶层常量 [kDanmakuRandomPalette] 供 MV 弹幕层共用。
 
   final Random _random = Random();
 
@@ -226,7 +230,7 @@ class _ScrollDanmakuLayerState extends State<ScrollDanmakuLayer> {
     final baseColor = entry.selfSend
         ? widget.highlightColor
         : (widget.randomColor
-            ? _randomPalette[_random.nextInt(_randomPalette.length)]
+            ? kDanmakuRandomPalette[_random.nextInt(kDanmakuRandomPalette.length)]
             : (widget.overrideColor ?? entry.color));
     final color =
         widget.opacity >= 1.0 ? baseColor : baseColor.withValues(alpha: baseColor.a * widget.opacity);

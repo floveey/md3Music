@@ -4791,6 +4791,45 @@ static const Set<String> _kAndroidOnlyAudioLabels = {
                   ),
             trailing: _statusText('${(_mvDanmakuOpacity * 100).round()}%'),
           ),
+        // v54：MV 弹幕速度与颜色（默认随机，与歌曲弹幕组同模式同口径）。
+        if (_mvDanmakuEnabled)
+          // search: MV 弹幕 速度 快慢 滚动 倍率
+          ValueListenableBuilder<double>(
+            valueListenable: SettingsRepository.mvDanmakuSpeed,
+            builder: (context, speed, _) => ListTile(
+              leading:
+                  Icon(Icons.speed_outlined, color: colorScheme.primary),
+              title: const Text('弹幕速度'),
+              subtitle: M3ESlider(
+                decoration: const M3ESliderDecoration(
+                  haptic: M3EHapticFeedback.medium,
+                ),
+                value: speed,
+                min: 0.5,
+                max: 2.0,
+                divisions: 15,
+                label: '×${speed.toStringAsFixed(2)}',
+                // 拖动只刷内存镜像（MV 层经 ListenableBuilder 即时生效），
+                // 松手才落盘（本仓滑条惯例）。
+                onChanged: (v) => SettingsRepository.mvDanmakuSpeed.value = v,
+                onChangeEnd: (v) => _settingsRepository.setMvDanmakuSpeed(v),
+              ),
+            ),
+          ),
+        if (_mvDanmakuEnabled)
+          // search: MV 弹幕 颜色 随机 彩色
+          ValueListenableBuilder<int?>(
+            valueListenable: SettingsRepository.mvDanmakuColor,
+            builder: (context, colorValue, _) => ListTile(
+              leading:
+                  Icon(Icons.palette_outlined, color: colorScheme.primary),
+              title: const Text('弹幕颜色'),
+              subtitle: _DanmakuColorRow(
+                current: colorValue,
+                onSelected: (c) => _settingsRepository.setMvDanmakuColor(c),
+              ),
+            ),
+          ),
         // 歌曲弹幕：控制是否在播放页叠加弹幕层（TV 无文本输入能力，不编入 TV 包）
         // search: 歌曲 弹幕 播放页 封面 滚动
         // v46：改 ValueListenableBuilder（同一静态镜像）——本地 setState +

@@ -164,6 +164,10 @@ class VivoMixSync {
   /// `title|artist`（当前播放树，v41 起与岛高亮匹配口径一致）。按来源找 Song
   /// 后交 PlayerProvider 播放；找不到则放弃（快照未覆盖的条目宁可无响应也不
   /// 模糊匹配错歌）。
+  /// v61：**game 改队列定位**——`title|artist` 树本来就是当前队列的镜像，点哪
+  /// 首就 `playSongAt` 定位到队列下标；此前用 `playSong` 的"单击列表单播"语义
+  /// 会把整个队列替换成 [song]，播放列表瞬间只剩一首（v60 真机实测）。收藏/
+  /// 本地树仍是"把这首歌播起来"的语义，队列不在当前队列里则照旧 playSong。
   Future<void> _handleVivoMixPlay(String mediaId) async {
     final player = _player;
     final favorites = _favorites;
@@ -177,12 +181,14 @@ class VivoMixSync {
         (mediaId.startsWith('queue:') ||
             mediaId.startsWith('fav:') ||
             mediaId.startsWith('local:'));
+    var fromCurrentTree = false;
     if (hasKnownPrefix) {
       final source = mediaId.substring(0, sep);
       final songId = mediaId.substring(sep + 1);
       switch (source) {
         case 'queue':
           song = player.playlist.where((s) => s.id == songId).firstOrNull;
+          fromCurrentTree = true;
         case 'fav':
           song = favorites.favorites.where((s) => s.id == songId).firstOrNull;
         case 'local':
@@ -197,13 +203,23 @@ class VivoMixSync {
       song = player.playlist
           .where((s) => s.displayName == title && s.artist == artist)
           .firstOrNull;
+      fromCurrentTree = true;
     }
     if (song == null) {
       debugPrint('[CardLyricLink] vivoMixPlay: no match for $mediaId');
       return;
     }
     debugPrint('[CardLyricLink] vivoMixPlay: play ${song.displayName}');
-    await player.playSong(song);
+    if (fromCurrentTree) {
+      // 当前队列镜像：定位下标播放，不替换队列。
+      final index = player.playlist.indexWhere((s) => s.id == song!.id);
+      if (index >= 0) {
+        await player.playSongAt(index);
+        return;
+      }
+      // 队列定位失败（快照与队列漂移）：退回单播保证"至少能播"。
+    }
+    await player.playSong(song!);
   }
 
   /// v45：岛循环模式切换（1=列表 / 2=单曲 / 3=随机）→ setLoopMode/setShuffle。

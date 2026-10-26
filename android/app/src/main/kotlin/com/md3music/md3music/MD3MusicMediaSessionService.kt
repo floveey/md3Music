@@ -96,6 +96,13 @@ class MD3MusicMediaSessionService : MediaSessionService() {
             }
         // 注册为 fork 的会话 host：fork 创建/已有活跃会话后 addSession 到本服务渲染通知
         AudioPlayer.setMediaSessionServiceHost(this)
+        // MD3Music fork v60 破案补链：上面的 `vivoMixPlayHook =` 装的是**本服务的
+        // 成员字段**，而 stub（MediaSessionLegacyStub）读取的是**静态字段**
+        // MediaSessionService.playFromMediaIdHook——v43"提成字段"那轮把静态赋值
+        // 改成了成员赋值，两者从未连通，钩子一直 null（岛点播 never 通过门，
+        // v57 环观测的 stub 有/hook 无与此完全吻合）。这里把静态字段同步接上。
+        androidx.media3.session.MediaSessionService.playFromMediaIdHook =
+            vivoMixPlayHook
         // MD3Music fork v48：列表内容变化通知——Dart 推新快照后通知已订阅的岛端
         // 刷新（melodist 参考实现同款；不通知则岛一直显示推送前的旧列表/空列表）。
         // notifyLegacyChildrenChanged 内部投主线程，任意线程调用安全。
@@ -376,6 +383,8 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // applicationContext（进程级），滞留无泄漏语义；且 island 及系统级 stub
         // 在服务销毁后仍会经 stub 走点播链，清掉即"hook null"漏命令（v57 环
         // 观测实证过此场景）。服务重建时 onCreate 会覆盖为新闭包。
+        // v60 补链后注意：静态钩子此处**保持不清**（成员字段随后即弃，静态才是
+        // stub 的读取点）。
         // v57：观测回调按 identity 清理（内部捕获本 service 的 RingLog 无
         // context，滞留会被下次 onCreate 覆盖；保持先例模式）。
         if (androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver ===

@@ -60,6 +60,12 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // AudioPlaybackService → Dart 按 <来源>:<songId> 找歌再播"，避免默认实现把
         // 无 URI 的 item 塞进 ExoPlayer（播不出且污染 media3 时间线）。
         // v43：提成字段，onDestroy 按 identity 清理（静态钩子不得滞留旧实例）。
+        // v58 破案：岛点播在 stub 到达（v57 环观测实证）而 hook 面包屑为零——
+        // 本服务某次销毁时按 identity 把静态钩子清成 null，之后岛连着的 media3
+        // 会话还在主进程，stub 继续收命令 → 全部漏过。修复：钩子改用
+        // applicationContext（进程级常驻，无旧实例滞留语义）且 onDestroy 不再
+        // 清理——静态钩子常驻贯通服务生命周期。
+        val hookAppContext = applicationContext
         vivoMixPlayHook =
             androidx.media3.session.MediaSessionService.PlayFromMediaIdHook { mediaId ->
                 if (mediaId.isNullOrEmpty()) {
@@ -74,11 +80,11 @@ class MD3MusicMediaSessionService : MediaSessionService() {
                         mediaId.startsWith(VivoMixLibrary.SOURCE_LOCAL + ":") ||
                         mediaId.contains('|')
                     if (starts) {
-                        val intent = Intent(this, AudioPlaybackService::class.java)
+                        val intent = Intent(hookAppContext, AudioPlaybackService::class.java)
                             .setAction(AudioPlaybackService.ACTION_VIVO_MIX_PLAY)
                             .putExtra(AudioPlaybackService.EXTRA_VIVO_MIX_MEDIA_ID, mediaId)
                         try {
-                            startService(intent)
+                            hookAppContext.startService(intent)
                         } catch (t: Throwable) {
                             Log.w("CarAutoResume", "vivo mix play forward failed", t)
                         }
@@ -366,10 +372,12 @@ class MD3MusicMediaSessionService : MediaSessionService() {
 
     override fun onDestroy() {
         AudioPlayer.setMediaSessionServiceHost(null)
-        if (androidx.media3.session.MediaSessionService.playFromMediaIdHook === vivoMixPlayHook) {
-            androidx.media3.session.MediaSessionService.playFromMediaIdHook = null
-        }
-        // v57：观测回调按 identity 清理（同 hook 模式，静态引用不得滞留旧实例）。
+        // v58：playFromMediaIdHook **不再按 identity 清理**——钩子内部只捕获
+        // applicationContext（进程级），滞留无泄漏语义；且 island 及系统级 stub
+        // 在服务销毁后仍会经 stub 走点播链，清掉即"hook null"漏命令（v57 环
+        // 观测实证过此场景）。服务重建时 onCreate 会覆盖为新闭包。
+        // v57：观测回调按 identity 清理（内部捕获本 service 的 RingLog 无
+        // context，滞留会被下次 onCreate 覆盖；保持先例模式）。
         if (androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver ===
             vivoMixPlayRingObserver
         ) {

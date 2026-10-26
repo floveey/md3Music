@@ -7095,6 +7095,7 @@ class _DanmakuColorRow extends StatelessWidget {
   final ValueChanged<int?> onSelected;
 
   static const List<int?> _preset = <int?>[
+    -1, // 随机（v49：每条弹幕从调色板随机取色，哨值 -1）——v55 起放第一档
     null, // 默认（跟随弹幕池/白）
     0xFFFFFFFF, // 白
     0xFFFFD54F, // 浅黄
@@ -7103,7 +7104,6 @@ class _DanmakuColorRow extends StatelessWidget {
     0xFFFFCC80, // 浅橙
     0xFFF48FB1, // 浅粉
     0xFFCE93D8, // 浅紫
-    -1, // 随机（v49：每条弹幕从调色板随机取色，哨值 -1）
   ];
 
   @override

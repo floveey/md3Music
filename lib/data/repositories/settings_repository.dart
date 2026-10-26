@@ -514,8 +514,9 @@ class SettingsRepository {
 
   /// MD3Music fork v46：歌曲弹幕颜色（int ARGB；null=跟随弹幕池/默认白；
   /// v49：-1=随机哨值——每条弹幕从固定调色板随机取色）。
+  /// v55：镜像初始值 -1——回填前的首帧也走随机（与 getter 默认口径一致）。
   static final ValueNotifier<int?> songDanmakuColor =
-      ValueNotifier<int?>(null);
+      ValueNotifier<int?>(-1);
 
   Future<int?> getSongDanmakuColor() async {
     final prefs = await SharedPreferences.getInstance();

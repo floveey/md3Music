@@ -813,6 +813,21 @@ import java.util.concurrent.TimeoutException;
       if (vmmLoop >= 1) {
         builder.putLong("vivomusicmix.media.metadata.LOOP_MODE", vmmLoop);
       }
+      // MD3Music fork v64：framework MEDIA_ID 统一为 `title|artist`——岛高亮靠它
+      // 与列表项 mediaId 相等来判定"正在播放"。此前这里写 item 原始 mediaId
+      // （song.id），高亮身份要等 APS 封面链再改写（真机实测：按钮切歌走预取
+      // 毫秒级、列表点歌要等封面下载 3~5 秒）。转换发生在 item 变化的当下，
+      // setUrl 后即刻高亮；后续 APS 注入同口径不跳变。
+      CharSequence vmmTitle = metadata.title;
+      CharSequence vmmArtist = metadata.artist;
+      if (vmmTitle != null && vmmTitle.length() > 0
+          || vmmArtist != null && vmmArtist.length() > 0) {
+        String t = vmmTitle == null ? "" : vmmTitle.toString();
+        String a = vmmArtist == null ? "" : vmmArtist.toString();
+        if (!t.isEmpty() || !a.isEmpty()) {
+          builder.putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, t + "|" + a);
+        }
+      }
     }
 
     if (metadata.extras != null) {

@@ -215,11 +215,16 @@ class VivoMixSync {
       final index = player.playlist.indexWhere((s) => s.id == song!.id);
       if (index >= 0) {
         await player.playSongAt(index);
+        // v63：起播后主动刷新岛列表——列表内容没变时岛不会自己重渲染，
+        // 高亮停在旧项要等 3~5 秒（真机实测）。刷新一次让高亮立即跟随。
+        unawaited(MediaNotificationService.refreshVivoMixChildren());
         return;
       }
       // 队列定位失败（快照与队列漂移）：退回单播保证"至少能播"。
     }
     await player.playSong(song!);
+    // v63：同上（收藏/本地树点播也把岛列表刷新到最新高亮状态）。
+    unawaited(MediaNotificationService.refreshVivoMixChildren());
   }
 
   /// v45：岛循环模式切换（1=列表 / 2=单曲 / 3=随机）→ setLoopMode/setShuffle。

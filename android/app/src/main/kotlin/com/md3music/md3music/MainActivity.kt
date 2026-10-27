@@ -798,6 +798,12 @@ class MainActivity : FlutterActivity() {
                     AudioPlaybackService.updateVivoMixState(call.arguments)
                     result.success(true)
                 }
+                // MD3Music fork v63：点歌后强制岛列表重拉（高亮立即跟随）——
+                // 同 v50 教训：headless 通道有而主通道缺 → 前台推送被吞。
+                "refreshVivoMixChildren" -> {
+                    AudioPlaybackService.refreshVivoMixChildren()
+                    result.success(true)
+                }
                 // 蓝牙歌词兼容通道；原生端保持共享 MediaSession 的歌曲身份不变。
                 "updateBluetoothLyric" -> {
                     val intent = Intent(this, AudioPlaybackService::class.java).apply {

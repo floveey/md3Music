@@ -294,6 +294,18 @@ class MediaNotificationService {
     }
   }
 
+  /// MD3Music fork v63：点歌后强制刷新岛列表——岛的高亮只在收到列表刷新
+  /// 时重渲染（列表内容不变时 notifyChildrenChanged 不会被列表指纹触发，
+  /// 高亮就停在旧项，真机实测要 3~5 秒才被别的刷新带出来）。不推数据，
+  /// 只让岛重新拉一次当前列表（原生侧走 childrenChangedNotifier 三树通知）。
+  static Future<void> refreshVivoMixChildren() async {
+    try {
+      await _channel.invokeMethod('refreshVivoMixChildren');
+    } catch (e) {
+      debugPrint('[VivoMixSync] refreshVivoMixChildren failed: $e');
+    }
+  }
+
   /// MD3Music fork v50：岛状态回显——循环模式（1=列表/2=单曲/3=随机）与当前曲
   /// 红心。岛只在 metadata 变化时读 LOOP_MODE/RATING 来点亮按钮并计算下一次点击
   /// （岛端 c0.l0），原生收到后写 metadata 并重发。[isFav] null=尚无当前曲。

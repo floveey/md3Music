@@ -208,6 +208,23 @@ class AudioPlaybackService : Service() {
             com.ryanheise.just_audio.AudioPlayer.updateVivoIslandState(loopMode, isFav)
             RingLog.i(TAG, "vivo mix state updated: loopMode=$loopMode isFav=$isFav")
         }
+
+        /// MD3Music fork v63：点歌后强制岛列表重拉一次（高亮立即跟随）。不推数据，
+        /// 只复用 childrenChangedNotifier 的三棵树通知；notifier 内部投主线程。
+        @JvmStatic
+        fun refreshVivoMixChildren() {
+            val notify = VivoMixLibrary.childrenChangedNotifier ?: return
+            for (parent in listOf(
+                VivoMixLibrary.PARENT_CURRENT,
+                VivoMixLibrary.PARENT_FAVORITE,
+                VivoMixLibrary.PARENT_LOCAL
+            )) {
+                try {
+                    notify(parent)
+                } catch (_: Exception) {
+                }
+            }
+        }
         /// MD3Music fork（方案A·封面兜底）：前台服务启动被拒（mAllowStartForeground=false，
         /// 如后台切歌/跨fade 收敛瞬间）时由 MainActivity 直接调用注入封面，
         /// 不依赖 AudioPlaybackService 启动。处理 http(s) 在线封面，命中内存缓存免下载。
@@ -1956,6 +1973,11 @@ class AudioPlaybackService : Service() {
                         // MD3Music fork v50：岛状态回显（循环模式 + 当前曲红心）→
                         // metadata 重发（岛只在 metadata 变化时读这两个值）。
                         updateVivoMixState(call.arguments)
+                        result.success(true)
+                    }
+                    "refreshVivoMixChildren" -> {
+                        // MD3Music fork v63：点歌后强制岛列表重拉（高亮立即跟随）。
+                        refreshVivoMixChildren()
                         result.success(true)
                     }
                     "updateLyricInfo" -> {

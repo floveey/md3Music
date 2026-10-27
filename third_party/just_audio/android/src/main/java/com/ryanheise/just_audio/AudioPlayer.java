@@ -1330,8 +1330,6 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                             Object modeRaw = modeArgs.get(VMM_KEY_LOOP_MODE);
                             int mode = modeRaw instanceof Number
                                     ? ((Number) modeRaw).intValue() : 1;
-                            android.util.Log.i("CardLyricLink",
-                                    "onCustomCommand PLAY_MODE: " + mode);
                             listener.onPlayMode(mode);
                         }
                     }
@@ -1352,8 +1350,6 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                         MediaSession session, MediaSession.ControllerInfo controller,
                         String mediaId, androidx.media3.common.Rating rating) {
                     final CustomActionListener listener = sCustomActionListener;
-                    android.util.Log.i("CardLyricLink",
-                            "onSetRating: " + rating);
                     if (listener != null
                             && rating instanceof androidx.media3.common.HeartRating) {
                         boolean want = ((androidx.media3.common.HeartRating) rating).isHeart();
@@ -1673,8 +1669,6 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             mb.setExtras(extras);
             int index = player.getCurrentMediaItemIndex();
             player.replaceMediaItem(index, cur.buildUpon().setMediaMetadata(mb.build()).build());
-            Log.i("AudioFocusFork", "republishVivoIslandMetadata loop=" + sVivoLoopMode
-                    + " heart=" + sVivoFavHeart);
         } catch (Exception e) {
             Log.w("AudioFocusFork", "republishVivoIslandMetadata failed: " + e);
         }

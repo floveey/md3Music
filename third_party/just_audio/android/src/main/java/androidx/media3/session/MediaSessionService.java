@@ -315,14 +315,6 @@ public abstract class MediaSessionService extends Service {
   @Nullable
   public static volatile PlayFromMediaIdHook playFromMediaIdHook;
 
-  /**
-   * MD3Music fork v57：岛点播到达性观测口——stub 收到 legacy playFromMediaId 时
-   * 回调（App 侧写 RingLog 进环形日志，免于 vivo 对 Log.i 的压制）。
-   * 本体只观测不消费，null=未接线时零行为。回调异常必须吞掉——观测不得影响链路。
-   */
-  @Nullable
-  public static volatile java.util.function.Consumer<String> playFromMediaIdRingObserver;
-
   /** MD3Music fork v39：browse 子节点提供者（App 侧注入）。 */
   @GuardedBy("lock")
   @Nullable

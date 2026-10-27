@@ -450,18 +450,6 @@ import org.checkerframework.checker.initialization.qual.Initialized;
     // 默认实现会把"只有 mediaId、没有 URI"的 item 塞进 ExoPlayer（播不出且污染
     // media3 时间线，App 队列是 Dart 自维护的）。钩子返回 true 表示已消费。
     // 钩子声明在 MediaSessionService（public）——本类包私有，App 侧引用不到。
-    // v46：入口日志——岛列表点播不通时的断点定位（岛是否发、发的是什么 id）。
-    // v57：追加环形观测口——vivo 压制第三方 Log.i，CardLyricLink 在诊断包
-    // logcat 段看不到；App 侧经 playFromMediaIdRingObserver 写 RingLog 进环。
-    android.util.Log.i("CardLyricLink", "onPlayFromMediaId: " + mediaId);
-    try {
-      java.util.function.Consumer<String> ring = MediaSessionService.playFromMediaIdRingObserver;
-      if (ring != null) {
-        ring.accept(String.valueOf(mediaId));
-      }
-    } catch (Throwable ignore) {
-      // 观测失败不得影响点播链路。
-    }
     MediaSessionService.PlayFromMediaIdHook hook = MediaSessionService.playFromMediaIdHook;
     if (hook != null && hook.onPlayFromMediaId(mediaId)) {
       return;

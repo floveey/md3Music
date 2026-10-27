@@ -71,8 +71,6 @@ class MD3MusicMediaSessionService : MediaSessionService() {
                 if (mediaId.isNullOrEmpty()) {
                     false
                 } else {
-                    // v48：进环日志——岛端点播是否到达原生，下次诊断包直接可判。
-                    RingLog.i("CarAutoResume", "vivoMixPlayHook mediaId=$mediaId")
                     // v41：当前播放树的 mediaId 是 `title|artist` 口径（与岛高亮
                     // 匹配一致），不带来源前缀——含 '|' 的也一并拦截；其余按前缀。
                     val starts = mediaId.startsWith(VivoMixLibrary.SOURCE_CURRENT + ":") ||
@@ -99,8 +97,8 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         // MD3Music fork v60 破案补链：上面的 `vivoMixPlayHook =` 装的是**本服务的
         // 成员字段**，而 stub（MediaSessionLegacyStub）读取的是**静态字段**
         // MediaSessionService.playFromMediaIdHook——v43"提成字段"那轮把静态赋值
-        // 改成了成员赋值，两者从未连通，钩子一直 null（岛点播 never 通过门，
-        // v57 环观测的 stub 有/hook 无与此完全吻合）。这里把静态字段同步接上。
+        // 改成了成员赋值，两者从未连通，钩子一直 null（岛点播 never 通过门）。
+        // 这里把静态字段同步接上。
         androidx.media3.session.MediaSessionService.playFromMediaIdHook =
             vivoMixPlayHook
         // MD3Music fork v48：列表内容变化通知——Dart 推新快照后通知已订阅的岛端
@@ -109,14 +107,6 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         VivoMixLibrary.childrenChangedNotifier = { parentId ->
             notifyLegacyChildrenChanged(parentId)
         }
-        // MD3Music fork v57：点播到达性观测——stub 收到岛 playFromMediaId 即进环，
-        // 配合 hook 内的 vivoMixPlayHook 面包屑做"岛发了没 / 到了多少"两级判定。
-        vivoMixPlayRingObserver =
-            java.util.function.Consumer { mediaId ->
-                RingLog.i("CarAutoResume", "stub onPlayFromMediaId mediaId=$mediaId")
-            }
-        androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver =
-            vivoMixPlayRingObserver
         // MD3Music fork v21（连车拉起）：读取外部绑定时自动拉起+续播的开关
         autoWakeEnabled = try {
             getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -284,7 +274,6 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         if (intent?.action == AudioPlayer.VMM_ACTION_PLAY_MODE) {
             val modeRaw = intent.extras?.get(AudioPlayer.VMM_KEY_LOOP_MODE)
             val mode = (modeRaw as? Number)?.toInt() ?: 1
-            RingLog.i("CarAutoResume", "PLAY_MODE intent 转发 mode=$mode")
             val forward = Intent(this, AudioPlaybackService::class.java)
                 .setAction(AudioPlaybackService.ACTION_VIVO_MIX_PLAY_MODE)
                 .putExtra(AudioPlaybackService.EXTRA_VIVO_MIX_PLAY_MODE, mode)
@@ -370,29 +359,16 @@ class MD3MusicMediaSessionService : MediaSessionService() {
         return result
     }
 
-    /** v43：点播钩子字段（onDestroy 按 identity 清理，防静态滞留旧实例）。 */
+    /** v43：点播钩子字段（静态字段由其持有，onDestroy 不清）。 */
     private var vivoMixPlayHook: androidx.media3.session.MediaSessionService.PlayFromMediaIdHook? =
         null
 
-    /** v57：点播到达性观测字段（onDestroy 按 identity 清理）。 */
-    private var vivoMixPlayRingObserver: java.util.function.Consumer<String>? = null
-
     override fun onDestroy() {
         AudioPlayer.setMediaSessionServiceHost(null)
-        // v58：playFromMediaIdHook **不再按 identity 清理**——钩子内部只捕获
+        // v58：playFromMediaIdHook **不按 identity 清理**——钩子内部只捕获
         // applicationContext（进程级），滞留无泄漏语义；且 island 及系统级 stub
-        // 在服务销毁后仍会经 stub 走点播链，清掉即"hook null"漏命令（v57 环
-        // 观测实证过此场景）。服务重建时 onCreate 会覆盖为新闭包。
-        // v60 补链后注意：静态钩子此处**保持不清**（成员字段随后即弃，静态才是
-        // stub 的读取点）。
-        // v57：观测回调按 identity 清理（内部捕获本 service 的 RingLog 无
-        // context，滞留会被下次 onCreate 覆盖；保持先例模式）。
-        if (androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver ===
-            vivoMixPlayRingObserver
-        ) {
-            androidx.media3.session.MediaSessionService.playFromMediaIdRingObserver =
-                null
-        }
+        // 在服务销毁后仍会经 stub 走点播链，清掉即"hook null"漏命令。服务重建
+        // 时 onCreate 会覆盖为新闭包。
         // v48：列表变化通知回调按 identity 清理（静态引用不得滞留旧实例）。
         if (VivoMixLibrary.childrenChangedNotifier != null) {
             VivoMixLibrary.childrenChangedNotifier = null
